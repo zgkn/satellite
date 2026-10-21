@@ -22,6 +22,14 @@ has a default, so you can just tap *Run workflow*. It takes about 2-3 minutes.
   The branch is rewritten as a single commit on every run, so it never accumulates history.
 - The job summary shows the scan time, the image path and links.
 
+### Website (GitHub Pages)
+
+Each run also regenerates `index.html` (latest image, download link, thumbnails of recent scans; works on phones) on
+the `himawari-output` branch via `scripts/build_site.py`. To serve it, enable Pages once:
+**Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `himawari-output`, folder `/ (root)` → Save.**
+The site is then at `https://<owner>.github.io/satellite/` and updates after every run (allow a minute or two for Pages
+to redeploy). Note that Pages sites are public, and on a private repository Pages needs a paid GitHub plan.
+
 ### Inputs
 
 | Input | Default | Meaning |

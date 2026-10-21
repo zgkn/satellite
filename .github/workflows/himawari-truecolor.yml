@@ -141,6 +141,9 @@ jobs:
           ls -1 "$pub" | grep -E '^[0-9]{8}_[0-9]{4}\.png$' | sort | head -n "-$KEEP_IMAGES" \
             | while read -r old; do rm -f "$pub/$old"; done
 
+          # Static site (index.html + thumbnails) served by GitHub Pages from this branch.
+          python "$GITHUB_WORKSPACE/scripts/build_site.py" "$pub"
+
           # Orphan branch holding a single fresh commit: history never grows, so the
           # repo stays small even though every commit adds a ~5 MB PNG.
           cd "$pub"

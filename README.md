@@ -42,7 +42,10 @@ to redeploy). Note that Pages sites are public, and on a private repository Page
 | `coastlines` | **on** | Draw green coastlines from Natural Earth 1:10m (public domain, stored in `data/ne_10m_coastline.zip`) at 1.5 px width. Untick for a clean image. Locally: `--no-coastlines`, `--coast-width`. |
 | `rayleigh` | **on** | Apply Satpy's Rayleigh correction, which removes the blue atmospheric haze. It also applies the sun-zenith correction the modifier requires. Untick it for the plain JMA recipe (no Rayleigh, as in the quick guide), which is a bit faster. The first run downloads look-up tables; later runs reuse the cache. |
 
-Scan times are always UTC. Himawari data appear in the bucket roughly 20-30 min after the scan.
+Scan times are always UTC. Himawari data appear in the bucket roughly 20-30 min after the scan. The **0240 and 1440
+UTC** full-disk scans are missing from the bucket every day (10:40 and 22:40 SGT; presumably satellite housekeeping),
+so asking for those exact times fails with a "no files found" message; use the scan before or after. A blank
+`datetime_utc` handles this automatically by walking back to the newest complete scan.
 
 ### What it checks
 

@@ -150,6 +150,9 @@ def select_scan(s3, segments, requested: dt.datetime | None, lookback_h: float):
                 f"No B01/B02/B03 files found in s3://{BUCKET}/{scan_prefix(requested)}\n"
                 "Check the date/time (UTC, YYYYMMDDHHMM): the scan may not exist yet "
                 "(data lags real time by ~20-30 min) or may be outside the archive."
+                + ("\nNote: the 0240 and 1440 UTC full-disk scans are absent from the bucket every day "
+                   "(seen daily; presumably satellite housekeeping). Pick the scan before or after."
+                   if f"{requested:%H%M}" in ("0240", "1440") else "")
             )
         miss = missing_files(found, segments)
         if miss:

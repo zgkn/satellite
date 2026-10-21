@@ -659,7 +659,7 @@ def run(args) -> dict:
                 notes.append(f"Cold cloud ({cue[0]} < {cue[1]:g} K) shown grey; smoke and warm cloud keep their colour")
             if sun:
                 refl = "/".join(c[0] for c in prod["channels"] if c[1] == _REFL)
-                notes.append(f"{refl} divided by cos(sun zenith), capped at {sun[1]:g}\N{DEGREE SIGN}: steady brightness")
+                notes.append(f"{refl} divided by cos(sun zenith), capped at {sun[1]:g}\N{DEGREE SIGN}")
             if low_sun_note:
                 notes.append(low_sun_note)
             out = Path(args.outdir) / prod["subdir"] / f"{scan:%Y%m%d_%H%M}.png"

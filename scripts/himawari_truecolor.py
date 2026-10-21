@@ -38,6 +38,9 @@ N_SEGMENTS = 10  # full disk is split into 10 equal N-S segments, 01 = north
 FD_HALF_HEIGHT_M = 5.5e6
 GEOS_CRS = dict(proj="geos", h=35785863, lon_0=140.7, sweep="y", a=6378137, b=6356752.3)
 
+COASTLINE_ZIP = Path(__file__).resolve().parent.parent / "data" / "ne_10m_coastline.zip"
+COAST_RGBA = (40, 255, 70, 255)  # green
+
 SGT = dt.timezone(dt.timedelta(hours=8))
 KEY_RE = re.compile(
     r"HS_H09_(?P<ymd>\d{8})_(?P<hm>\d{4})_B(?P<band>\d{2})_FLDK_R(?P<res>\d{2})"
@@ -320,10 +323,43 @@ def _font(size: int):
         return ImageFont.load_default()
 
 
-def overlay_and_save(rgb, scan: dt.datetime, gamma: float, rayleigh: bool, out: Path) -> None:
+def draw_coastline(img, bbox, resolution: float, width_px: float):
+    """Draw Natural Earth 1:10m coastlines in green onto ``img`` (an RGBA lat/lon-grid image)."""
+    import shapefile  # pyshp
+    from PIL import Image, ImageDraw
+
+    w, s, e, n = bbox
+    ss = 2  # draw at 2x and shrink for smooth, anti-aliased lines
+    mask = Image.new("L", (img.width * ss, img.height * ss), 0)
+    draw = ImageDraw.Draw(mask)
+    lw = max(1, round(width_px * ss))
+    n_parts = 0
+    with shapefile.Reader(str(COASTLINE_ZIP)) as reader:
+        for shp in reader.iterShapes():
+            x0, y0, x1, y1 = shp.bbox
+            if x1 < w or x0 > e or y1 < s or y0 > n:
+                continue
+            parts = list(shp.parts) + [len(shp.points)]
+            for a, b in zip(parts[:-1], parts[1:]):
+                # pixel-edge coordinates -> PIL pixel-centre coordinates, at ss x scale
+                xy = [((lon - w) / resolution * ss - 0.5, (n - lat) / resolution * ss - 0.5)
+                      for lon, lat in shp.points[a:b]]
+                if len(xy) > 1:
+                    draw.line(xy, fill=255, width=lw, joint="curve")
+                    n_parts += 1
+    mask = mask.resize(img.size, Image.LANCZOS)
+    img.paste(Image.new("RGBA", img.size, COAST_RGBA), mask=mask)
+    log(f"Drew {n_parts} coastline segments (Natural Earth 1:10m)")
+    return img
+
+
+def overlay_and_save(rgb, scan: dt.datetime, gamma: float, rayleigh: bool, out: Path,
+                     bbox=None, resolution=None, coast_width: float = 0.0) -> None:
     from PIL import Image, ImageDraw
 
     img = Image.fromarray(rgb, "RGB").convert("RGBA")
+    if coast_width > 0:
+        draw_coastline(img, bbox, resolution, coast_width)
     h = rgb.shape[0]
     size = max(12, round(h / 48))
     big, small = _font(size), _font(round(size * 0.8))
@@ -359,6 +395,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--resolution", type=float, default=0.01, help="output pixel size in degrees (0.01 ~ 1 km)")
     p.add_argument("--rayleigh", action=argparse.BooleanOptionalAction, default=True,
                    help="apply Satpy Rayleigh correction (default on; --no-rayleigh for the plain JMA recipe)")
+    p.add_argument("--coastlines", action=argparse.BooleanOptionalAction, default=True,
+                   help="draw green Natural Earth 1:10m coastlines (default on)")
+    p.add_argument("--coast-width", type=float, default=1.5, help="coastline width in output pixels")
     p.add_argument("--outdir", default="output", help="directory for the PNG")
     p.add_argument("--workdir", default=None, help="scratch directory for HSD files (deleted afterwards)")
     p.add_argument("--lookback-hours", type=float, default=3.0, help="how far back to look for the newest scan")
@@ -421,7 +460,8 @@ def run(args) -> dict:
         files = download(s3, keys, work / "hsd")
         rgb = make_rgb(files, bbox, args.resolution, args.gamma, args.rayleigh)
         out = Path(args.outdir) / f"{scan:%Y%m%d_%H%M}.png"
-        overlay_and_save(rgb, scan, args.gamma, args.rayleigh, out)
+        overlay_and_save(rgb, scan, args.gamma, args.rayleigh, out, bbox, args.resolution,
+                         args.coast_width if args.coastlines else 0.0)
     finally:
         shutil.rmtree(work, ignore_errors=True)
         if old_tmp is None:

@@ -29,6 +29,11 @@ on:
         required: false
         default: "0.01"
         type: string
+      coastlines:
+        description: "Draw green coastlines (Natural Earth 1:10m); untick for a clean image"
+        required: false
+        default: true
+        type: boolean
       rayleigh:
         description: "Apply Rayleigh correction (on by default; untick for the plain JMA recipe, a bit faster)"
         required: false
@@ -84,6 +89,7 @@ jobs:
           IN_SEGMENTS: ${{ inputs.segments }}
           IN_RESOLUTION: ${{ inputs.resolution }}
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
+          IN_COASTLINES: ${{ inputs.coastlines }}
         run: |
           args=(
             --datetime-utc "$IN_DATETIME"
@@ -96,6 +102,7 @@ jobs:
             --json-out output/result.json
           )
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
+          if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
           python scripts/himawari_truecolor.py "${args[@]}"
 
       - name: Read result

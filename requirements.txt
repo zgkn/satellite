@@ -4,3 +4,4 @@ pyspectral
 numpy
 pillow
 boto3
+pyshp

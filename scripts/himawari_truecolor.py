@@ -11,7 +11,8 @@ Products (JMA Himawari RGB Quick Guides; each band: reflectance 0-100 %, clip, /
     day_fire            R = B07 (3.9 um brightness temperature, 27..60 C, gamma 0.4), G = B04, B = B03
                         (NOAA/CIRA VIIRS Day Fire RGB recipe on AHI bands: fire red, burn scar reddish
                         brown, smoke blue, clouds cyan, vegetation green; B07 is 2 km, VIIRS I4 375 m;
-                        the guide's red minimum is 0 C, raised to 27 C for the tropics)
+                        the guide's red minimum is 0 C, raised to 27 C for the tropics; cold cloud, B13 below
+                        ~290 K, is blended to grey so it stands apart from smoke - also not in the guide)
 
 The Satpy built-in composites are deliberately NOT used, because they apply extra
 corrections.  The bands are loaded, resampled and stacked by hand.  The reflectance is
@@ -61,9 +62,13 @@ PRODUCTS = {
     # The guide scales the red channel 0..60 C; here the minimum is raised to 27 C (300.15 K) because tropical
     # sea and land sit at ~27 C and above at 3.9 um, which turned all water dark red (tested on a real scan:
     # sea red 35 -> 0, hotspots unchanged). Everything else is as in the guide.
+    # cloud_cue: smoke and cloud come out the same teal hue over vegetation, so pixels colder than `warm` K at
+    # 10.4 um (B13) are blended to grey, fully by `cold` K. Clouds with tops above ~1.5-3 km are cold; thin
+    # low-level smoke is as warm as the ground. This is an addition to the guide, not part of it.
     "day_fire": dict(
         label="Day Fire RGB", recipe="NOAA/CIRA recipe, AHI bands", uniform_gamma=False, rayleigh=False,
         channels=(("B07", _BT, 300.15, 333.15, 0.4), ("B04", _REFL, 0, 100, 1.0), ("B03", _REFL, 0, 100, 1.0)),
+        cloud_cue=dict(band="B13", warm=290.0, cold=280.0),
         subdir="dayfire", coast_rgba=(255, 60, 255, 255)),
 }
 for _p in PRODUCTS.values():
@@ -311,10 +316,11 @@ def band_of(path: Path) -> str | None:
     return f"B{m['band']}" if m else None
 
 
-def make_rgb(files, bbox, resolution, product, gammas, rayleigh):
+def make_rgb(files, bbox, resolution, product, gammas, rayleigh, cue=None):
     """Return a uint8 (H, W, 3) array for ``product`` (a PRODUCTS entry) over the bbox.
 
-    ``gammas`` is the (R, G, B) gamma triple.
+    ``gammas`` is the (R, G, B) gamma triple.  ``cue`` is None or (band, warm_K, cold_K): pixels whose
+    brightness temperature in ``band`` is below ``warm_K`` are blended to grey, fully grey at ``cold_K``.
     """
     import dask
     import numpy as np
@@ -336,19 +342,23 @@ def make_rgb(files, bbox, resolution, product, gammas, rayleigh):
     bands = product["bands"]  # (R, G, B)
     channels = product["channels"]
     # Only this product's files, so each Scene decompresses just what it needs.
-    scn = Scene(filenames=[str(f) for f in files if band_of(f) in bands], reader="ahi_hsd")
+    wanted = set(bands) | ({cue[0]} if cue else set())
+    scn = Scene(filenames=[str(f) for f in files if band_of(f) in wanted], reader="ahi_hsd")
     if rayleigh:
         # The Rayleigh modifier requires sun-zenith-corrected reflectance as input.
         scn.load(list(bands), calibration="reflectance", modifiers=("sunz_corrected", "rayleigh_corrected"))
     else:
         for cal in dict.fromkeys(c[1] for c in channels):  # one load per calibration, in channel order
             scn.load([c[0] for c in channels if c[1] == cal], calibration=cal)
+    if cue:
+        scn.load([cue[0]], calibration=_BT)
 
     check_loaded_coverage(scn[bands[0]].attrs["area"], bbox)
 
     resampled = scn.resample(area, resampler="nearest")
     chans = [resampled[b].data for b in bands]
     rgb = np.stack([np.asarray(dask.compute(c)[0], dtype="float32") for c in chans], axis=-1)
+    cue_bt = np.asarray(dask.compute(resampled[cue[0]].data)[0], dtype="float32") if cue else None
 
     bad = float(np.isnan(rgb).any(axis=-1).mean())
     if bad > 0.01:
@@ -361,6 +371,15 @@ def make_rgb(files, bbox, resolution, product, gammas, rayleigh):
     for i, (_, _, vmin, vmax, _) in enumerate(channels):
         scaled = np.nan_to_num(np.clip((rgb[..., i] - vmin) / (vmax - vmin), 0.0, 1.0), nan=0.0)
         out[..., i] = np.power(scaled, 1.0 / gammas[i])
+    if cue:
+        # Cold (= high/thick) cloud -> grey, keeping its brightness texture; smoke and ground stay as they are.
+        band, warm, cold = cue
+        weight = np.nan_to_num(np.clip((warm - cue_bt) / (warm - cold), 0.0, 1.0), nan=0.0)[..., None]
+        grey = np.maximum(out[..., 1], out[..., 2])[..., None]
+        out = (1.0 - weight) * out + weight * grey
+        log(f"  cloud cue: {band} < {warm:g} K blends to grey, fully by {cold:g} K "
+            f"({float((weight > 0).mean()):.1%} of pixels touched, {float((weight > 0.5).mean()):.1%} mostly grey; "
+            f"{band} K p1 {np.nanpercentile(cue_bt, 1):.0f} median {np.nanmedian(cue_bt):.0f})")
     return np.round(out * 255.0).astype("uint8")
 
 
@@ -408,13 +427,22 @@ def draw_coastline(img, bbox, resolution: float, width_px: float, rgba):
     return img
 
 
+def cloud_cue_for(prod: dict, args):
+    """(band, warm_K, cold_K) for the cold-cloud cue of ``prod``, or None if it has none or it is off."""
+    cue = prod.get("cloud_cue")
+    if not cue or not args.cloud_cue:
+        return None
+    warm = args.cloud_bt if args.cloud_bt is not None else cue["warm"]
+    return cue["band"], warm, warm - (cue["warm"] - cue["cold"])
+
+
 def gamma_text(gammas) -> str:
     return f"{gammas[0]:g}" if len(set(gammas)) == 1 else "/".join(f"{g:g}" for g in gammas)
 
 
 def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bool, out: Path,
                      bbox=None, resolution=None, coast_width: float = 0.0,
-                     wind=None, wind_spacing: float = 45.0) -> None:
+                     wind=None, wind_spacing: float = 45.0, notes=()) -> None:
     from PIL import Image, ImageDraw
 
     img = Image.fromarray(rgb, "RGB").convert("RGBA")
@@ -435,6 +463,7 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
             "  " + " ".join(f"{k} {band}" + (f" {vmin - 273.15:.0f}-{vmax - 273.15:.0f}C" if cal == _BT else "")
                              for k, (band, cal, vmin, vmax, _) in zip("RGB", product["channels"]))), small, white),
     ]
+    lines += [(note, small, (205, 205, 205, 255)) for note in notes]
     if wind is not None:  # the line doubles as the legend: same colour as the streamlines
         lines.append((f"Streamlines: {wind.describe()}", small, (*ecmwf_winds.LINE_RGB, 255)))
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -472,6 +501,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--coastlines", action=argparse.BooleanOptionalAction, default=True,
                    help="draw Natural Earth 1:10m coastlines (default on; green, magenta on natural_fire_color)")
     p.add_argument("--coast-width", type=float, default=1.5, help="coastline width in output pixels")
+    p.add_argument("--cloud-cue", action=argparse.BooleanOptionalAction, default=True,
+                   help="day_fire only: show cold cloud (10.4 um brightness temperature below ~290 K) in grey so it "
+                        "stands apart from smoke (default on; an addition to the NOAA/CIRA recipe)")
+    p.add_argument("--cloud-bt", type=float, default=None,
+                   help="temperature in K where the cold-cloud grey starts (default 290); fully grey 10 K colder")
     p.add_argument("--winds", action=argparse.BooleanOptionalAction, default=True,
                    help="overlay ECMWF IFS wind streamlines (default on; skipped with a warning if ECMWF data fail)")
     p.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa for the streamlines")
@@ -492,8 +526,11 @@ def run(args) -> dict:
         raise UserError(f"resolution must be between 0.001 and 1 degrees, got {args.resolution}")
     if args.gamma is not None and not 0.2 <= args.gamma <= 5:
         raise UserError(f"gamma must be between 0.2 and 5, got {args.gamma}")
+    if args.cloud_bt is not None and not 250 <= args.cloud_bt <= 320:
+        raise UserError(f"cloud-bt must be between 250 and 320 K, got {args.cloud_bt}")
     products = list(PRODUCTS) if args.product == "all" else [args.product]
-    bands = sorted({b for p in products for b in PRODUCTS[p]["bands"]})
+    bands = sorted({b for p in products for b in PRODUCTS[p]["bands"]}
+                   | {cue[0] for p in products if (cue := cloud_cue_for(PRODUCTS[p], args))})
     if args.winds and args.wind_level not in ecmwf_winds.PRESSURE_LEVELS:
         raise UserError(f"wind level must be one of {ecmwf_winds.PRESSURE_LEVELS} hPa, got {args.wind_level}")
     if not 10 <= args.wind_spacing <= 400:
@@ -569,11 +606,13 @@ def run(args) -> dict:
             use_rayleigh = bool(args.rayleigh and prod["rayleigh"])
             log(f"--- {prod['label']}: R/G/B = {'/'.join(prod['bands'])}, gamma {gamma_text(gammas)}"
                 + (f", Rayleigh {'on' if use_rayleigh else 'off'}" if prod["rayleigh"] else ""))
-            rgb = make_rgb(files, bbox, args.resolution, prod, gammas, use_rayleigh)
+            cue = cloud_cue_for(prod, args)
+            rgb = make_rgb(files, bbox, args.resolution, prod, gammas, use_rayleigh, cue)
+            notes = (f"Cold cloud ({cue[0]} < {cue[1]:g} K) shown grey; smoke and warm cloud keep their colour",) if cue else ()
             out = Path(args.outdir) / prod["subdir"] / f"{scan:%Y%m%d_%H%M}.png"
             try:
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution,
-                                 coast_width, wind, args.wind_spacing)
+                                 coast_width, wind, args.wind_spacing, notes)
             except Exception as exc:  # noqa: BLE001
                 if wind is None:
                     raise
@@ -581,7 +620,8 @@ def run(args) -> dict:
                 annotate("warning", f"Drawing wind streamlines failed ({type(exc).__name__}: {exc}); "
                          "publishing without them.")
                 wind = None  # later products skip them too
-                overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution, coast_width)
+                overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution, coast_width,
+                                 None, args.wind_spacing, notes)
             result["outputs"].append({
                 "product": name, "label": prod["label"], "png": str(out), "subdir": prod["subdir"],
                 "size_px": [int(rgb.shape[1]), int(rgb.shape[0])], "gamma": gamma_text(gammas),

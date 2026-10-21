@@ -48,6 +48,8 @@ SECTIONS = (
         note="Recipe from the VIIRS Day Fire RGB quick guide, with the red minimum raised from 0 to 27&nbsp;&deg;C so "
              "tropical sea stays black. Over forest, smoke and cloud come out the same teal, so cold cloud "
              "(10.4&nbsp;&micro;m below ~290&nbsp;K) is shown grey; smoke and low, warm cloud keep their colour. "
+             "The 0.86/0.64&nbsp;&micro;m channels are divided by cos(sun zenith), capped at 80&deg;, so brightness "
+             "does not follow the sun; a low-sun note on the image means one side is still dim and noisy. "
              "Himawari's 3.9&nbsp;&micro;m band has 2&nbsp;km pixels (VIIRS: 375&nbsp;m), so only larger fires show. "
              "Warm, sunlit ground and sun glint on water can also look red, and thick cloud hides fires.",
     ),

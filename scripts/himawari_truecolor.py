@@ -11,7 +11,9 @@ Products (each channel: scaled min..max, clip, ** (1/gamma)):
                         (NOAA/CIRA VIIRS Day Fire RGB recipe on AHI bands: fire red, burn scar reddish
                         brown, smoke blue, clouds cyan, vegetation green; B07 is 2 km, VIIRS I4 375 m;
                         the guide's red minimum is 0 C, raised to 27 C for the tropics; cold cloud, B13 below
-                        ~290 K, is blended to grey so it stands apart from smoke - also not in the guide)
+                        ~290 K, is blended to grey so it stands apart from smoke, and the 0.86/0.64 um
+                        channels are divided by cos(sun zenith), capped at 80 deg, so brightness does not
+                        follow the sun - all three are additions to the guide)
 
 The Satpy built-in composites are deliberately NOT used, because they apply extra
 corrections.  The bands are loaded, resampled and stacked by hand.  The reflectance is
@@ -64,6 +66,11 @@ PRODUCTS = {
         label="Day Fire RGB", recipe="NOAA/CIRA recipe, AHI bands", uniform_gamma=False, rayleigh=False,
         channels=(("B07", _BT, 300.15, 333.15, 0.4), ("B04", _REFL, 0, 100, 1.0), ("B03", _REFL, 0, 100, 1.0)),
         cloud_cue=dict(band="B13", warm=290.0, cold=280.0),
+        # sun_correction: plain albedo scales with cos(sun zenith), so the picture dims through the afternoon
+        # (cos 0.97 at 12:00 SGT, 0.62 at 16:00 at the centre of the default box, 0.45 at its east edge). The
+        # reflective channels are divided by cos(zenith) per pixel, capped at `limit` degrees (factor <= 5.8)
+        # so noise near the horizon is not blown up. Also an addition to the guide, whose examples are near noon.
+        sun_correction=dict(limit=80.0),
         subdir="dayfire", coast_rgba=(255, 60, 255, 255)),
 }
 for _p in PRODUCTS.values():
@@ -311,11 +318,13 @@ def band_of(path: Path) -> str | None:
     return f"B{m['band']}" if m else None
 
 
-def make_rgb(files, bbox, resolution, product, gammas, rayleigh, cue=None):
+def make_rgb(files, bbox, resolution, product, gammas, rayleigh, cue=None, sun=None):
     """Return a uint8 (H, W, 3) array for ``product`` (a PRODUCTS entry) over the bbox.
 
     ``gammas`` is the (R, G, B) gamma triple.  ``cue`` is None or (band, warm_K, cold_K): pixels whose
     brightness temperature in ``band`` is below ``warm_K`` are blended to grey, fully grey at ``cold_K``.
+    ``sun`` is None or (scan_time, limit_deg): reflectance channels are divided by cos(sun zenith) per
+    pixel, with the zenith capped at ``limit_deg``.
     """
     import dask
     import numpy as np
@@ -358,6 +367,22 @@ def make_rgb(files, bbox, resolution, product, gammas, rayleigh, cue=None):
     bad = float(np.isnan(rgb).any(axis=-1).mean())
     if bad > 0.01:
         annotate("warning", f"{bad:.1%} of pixels have no data (shown black)")
+    if sun:
+        from pyorbital.astronomy import sun_zenith_angle
+
+        scan_time, limit = sun
+        lons = np.broadcast_to((w + (np.arange(width) + 0.5) * resolution)[None, :], (height, width))
+        lats = np.broadcast_to((n - (np.arange(height) + 0.5) * resolution)[:, None], (height, width))
+        zen = sun_zenith_angle(scan_time.replace(tzinfo=None), lons, lats)
+        cos_limit = float(np.cos(np.radians(limit)))
+        factor = (1.0 / np.maximum(np.cos(np.radians(zen)), cos_limit)).astype("float32")
+        refl = [band for band, cal, *_ in channels if cal == _REFL]
+        for i, (_, cal, *_) in enumerate(channels):
+            if cal == _REFL:
+                rgb[..., i] *= factor
+        log(f"  sun-angle correction: {'/'.join(refl)} / cos(zenith), capped at {limit:g} deg (max x{1 / cos_limit:.1f}); "
+            f"factor min {float(factor.min()):.2f} median {float(np.median(factor)):.2f} max {float(factor.max()):.2f}, "
+            f"{float((zen >= limit).mean()):.1%} of pixels at or beyond the cap")
     out = np.empty_like(rgb)
     for i, (band, cal, vmin, vmax, _) in enumerate(channels):
         p1, p50, p99 = np.nanpercentile(rgb[..., i], [1, 50, 99])
@@ -461,7 +486,9 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
             "  " + " ".join(f"{k} {band}" + (f" {vmin - 273.15:.0f}-{vmax - 273.15:.0f}C" if cal == _BT else "")
                              for k, (band, cal, vmin, vmax, _) in zip("RGB", product["channels"]))), small, white),
     ]
-    lines += [(note, small, (205, 205, 205, 255)) for note in notes]
+    for note in notes:  # a note is text, or (text, rgba) to override the grey
+        text, fill = note if isinstance(note, tuple) else (note, (205, 205, 205, 255))
+        lines.append((text, small, fill))
     if wind is not None:  # the line doubles as the legend: same colour as the streamlines
         lines.append((f"Streamlines: {wind.describe()}", small, (*ecmwf_winds.LINE_RGB, 255)))
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -503,6 +530,12 @@ def build_parser() -> argparse.ArgumentParser:
                         "stands apart from smoke (default on; an addition to the NOAA/CIRA recipe)")
     p.add_argument("--cloud-bt", type=float, default=None,
                    help="temperature in K where the cold-cloud grey starts (default 290); fully grey 10 K colder")
+    p.add_argument("--sun-correction", action=argparse.BooleanOptionalAction, default=True,
+                   help="day_fire only: divide the 0.86/0.64 um channels by cos(sun zenith), capped at 80 deg, so "
+                        "brightness does not follow the sun (default on; an addition to the NOAA/CIRA recipe)")
+    p.add_argument("--low-sun-zenith", type=float, default=75.0,
+                   help="warn (log, annotation, caption note) when the sun zenith at the bbox centre or its west/east "
+                        "edge exceeds this many degrees; images there are dim and noisy (default 75)")
     p.add_argument("--winds", action=argparse.BooleanOptionalAction, default=True,
                    help="overlay ECMWF IFS wind streamlines (default on; skipped with a warning if ECMWF data fail)")
     p.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa for the streamlines")
@@ -525,6 +558,8 @@ def run(args) -> dict:
         raise UserError(f"gamma must be between 0.2 and 5, got {args.gamma}")
     if args.cloud_bt is not None and not 250 <= args.cloud_bt <= 320:
         raise UserError(f"cloud-bt must be between 250 and 320 K, got {args.cloud_bt}")
+    if not 30 <= args.low_sun_zenith <= 90:
+        raise UserError(f"low-sun-zenith must be between 30 and 90 degrees, got {args.low_sun_zenith}")
     products = list(PRODUCTS) if args.product == "all" else [args.product]
     bands = sorted({b for p in products for b in PRODUCTS[p]["bands"]}
                    | {cue[0] for p in products if (cue := cloud_cue_for(PRODUCTS[p], args))})
@@ -568,6 +603,18 @@ def run(args) -> dict:
         annotate("warning", f"Sun is below the horizon at part of the bbox "
                  f"(SW/NE corner zenith {corners[0]:.0f}/{corners[1]:.0f} deg): that part will be dark.")
 
+    # Low-sun warning: the picture is dim and noisy wherever the sun is low, even if it is above the horizon.
+    zen_w, zen_e = solar_zenith(scan, bbox[0], clat), solar_zenith(scan, bbox[2], clat)
+    worst = max(zen_w, sza, zen_e)
+    low_sun_note = None
+    if worst > args.low_sun_zenith:
+        side = "west" if worst == zen_w else "east" if worst == zen_e else "centre"
+        result["low_sun"] = (f"sun zenith {zen_w:.0f}/{sza:.0f}/{zen_e:.0f} deg (west/centre/east), above "
+                             f"{args.low_sun_zenith:g}: the {side} side is dim and noisy")
+        annotate("warning", "Low sun: " + result["low_sun"] + ". Consider a scan nearer local noon.")
+        low_sun_note = (f"LOW SUN: zenith {worst:.0f}\N{DEGREE SIGN} on the {side} side - dim and noisy there",
+                        (255, 190, 60, 255))
+
     if args.check_only:
         result["status"] = "check_only"
         return result
@@ -604,8 +651,16 @@ def run(args) -> dict:
             log(f"--- {prod['label']}: R/G/B = {'/'.join(prod['bands'])}, gamma {gamma_text(gammas)}"
                 + (f", Rayleigh {'on' if use_rayleigh else 'off'}" if prod["rayleigh"] else ""))
             cue = cloud_cue_for(prod, args)
-            rgb = make_rgb(files, bbox, args.resolution, prod, gammas, use_rayleigh, cue)
-            notes = (f"Cold cloud ({cue[0]} < {cue[1]:g} K) shown grey; smoke and warm cloud keep their colour",) if cue else ()
+            sun = (scan, prod["sun_correction"]["limit"]) if prod.get("sun_correction") and args.sun_correction else None
+            rgb = make_rgb(files, bbox, args.resolution, prod, gammas, use_rayleigh, cue, sun)
+            notes = []
+            if cue:
+                notes.append(f"Cold cloud ({cue[0]} < {cue[1]:g} K) shown grey; smoke and warm cloud keep their colour")
+            if sun:
+                refl = "/".join(c[0] for c in prod["channels"] if c[1] == _REFL)
+                notes.append(f"{refl} divided by cos(sun zenith), capped at {sun[1]:g}\N{DEGREE SIGN}: steady brightness")
+            if low_sun_note:
+                notes.append(low_sun_note)
             out = Path(args.outdir) / prod["subdir"] / f"{scan:%Y%m%d_%H%M}.png"
             try:
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution,

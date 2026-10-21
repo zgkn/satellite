@@ -54,6 +54,11 @@ on:
         required: false
         default: true
         type: boolean
+      sun_correction:
+        description: "Day fire only: divide the 0.86/0.64 um channels by cos(sun zenith) so brightness does not follow the sun"
+        required: false
+        default: true
+        type: boolean
       rayleigh:
         description: "True color only: apply Rayleigh correction (on by default; untick for the plain JMA recipe, a bit faster)"
         required: false
@@ -113,6 +118,7 @@ jobs:
           IN_COASTLINES: ${{ inputs.coastlines }}
           IN_WINDS: ${{ inputs.winds }}
           IN_CLOUD_CUE: ${{ inputs.cloud_cue }}
+          IN_SUN_CORRECTION: ${{ inputs.sun_correction }}
         run: |
           args=(
             --datetime-utc "$IN_DATETIME"
@@ -129,6 +135,7 @@ jobs:
           if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
           if [ "$IN_WINDS" = "true" ]; then args+=(--winds); else args+=(--no-winds); fi
           if [ "$IN_CLOUD_CUE" = "true" ]; then args+=(--cloud-cue); else args+=(--no-cloud-cue); fi
+          if [ "$IN_SUN_CORRECTION" = "true" ]; then args+=(--sun-correction); else args+=(--no-sun-correction); fi
           python scripts/himawari_truecolor.py "${args[@]}"
 
       - name: Read result
@@ -211,7 +218,8 @@ jobs:
                 echo "**Scan:** $(jq -r .scan_utc_iso $r) / $(jq -r .scan_sgt_iso $r)  "
                 echo "**Sun zenith at bbox centre:** $(jq -r .sun_zenith_centre $r)°  "
                 echo "**Segments:** $(jq -r '.segments | map(tostring) | join(",")' $r), bands $(jq -r '.bands | join("/")' $r) (all files present)  "
-                echo "**Winds:** $(jq -r '.winds // "n/a"' $r)"
+                echo "**Winds:** $(jq -r '.winds // "n/a"' $r)  "
+                if [ -n "$(jq -r '.low_sun // empty' $r)" ]; then echo "**:warning: Low sun:** $(jq -r .low_sun $r)"; fi
                 echo
                 while IFS='|' read -r label png sub size; do
                   name=$(basename "$png"); path="${sub:+$sub/}"

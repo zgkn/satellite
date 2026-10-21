@@ -50,6 +50,7 @@ to redeploy). Note that Pages sites are public, and on a private repository Page
 | `winds` | **on** | Overlay thin orange streamlines of ECMWF IFS 925 hPa wind (see below). If the ECMWF data cannot be fetched the run still publishes the images, without winds, and prints a warning. Locally: `--no-winds`, `--wind-level` (hPa), `--wind-spacing` (px). |
 | `coastlines` | **on** | Draw coastlines from Natural Earth 1:10m (public domain, stored in `data/ne_10m_coastline.zip`) at 1.5 px width: green on True Color, magenta on Day Fire (green would be confused with the vegetation colour). Untick for clean images. Locally: `--no-coastlines`, `--coast-width`. |
 | `cloud_cue` | **on** | **Day Fire only.** Show cold cloud (10.4 µm below ~290 K) in grey so it stands apart from smoke (see Day Fire). Locally: `--no-cloud-cue`, `--cloud-bt`. |
+| `sun_correction` | **on** | **Day Fire only.** Divide the 0.86 and 0.64 µm channels by cos(sun zenith), capped at 80°, so brightness does not follow the sun (see Day Fire). Locally: `--no-sun-correction`. |
 | `rayleigh` | **on** | **True Color only.** Apply Satpy's Rayleigh correction, which removes the blue atmospheric haze. It also applies the sun-zenith correction the modifier requires. Untick it for the plain JMA recipe, which is a bit faster. The first run downloads look-up tables; later runs reuse the cache. Day Fire never uses it. |
 
 Scan times are always UTC. Himawari data appear in the bucket roughly 20-30 min after the scan. The **0240 and 1440
@@ -97,9 +98,25 @@ band (B13, 2 km).
   daytime signal also includes reflected sunlight, so sunlit, warm land can be redder than in the guide's examples.
 - **Small dots:** a hotspot is a block of about 2 output pixels, a small red dot on a phone screen. Open the
   full-size image, or use a smaller `bbox`.
-- **Reflectance:** the 0.86 and 0.64 µm channels are Satpy's plain albedo (radiance × the file's albedo coefficient,
-  no division by the cosine of the sun angle), so the image gets darker as the sun gets lower (late afternoon, the
-  east/west edges).
+- **Reflectance:** Satpy's reflectance for these files is plain albedo (radiance × the file's albedo coefficient, no
+  division by the cosine of the sun angle), which is what the guide uses; see the next paragraph for what we do about it.
+
+**Sun-angle correction (an addition, not in the guide).** Plain albedo scales with cos(sun zenith), so the picture
+dims through the afternoon and morning, and one side of an image can be much darker than the other. On 21 Oct, at the
+centre of the default box, cos(zenith) is 0.97 at 12:00 SGT, 0.62 at 16:00 and 0.15 at 18:00; at the east edge it is
+0.45 at 16:00. The 0.86 and 0.64 µm channels are therefore divided by cos(zenith) **per pixel** (the sun angle at each
+output pixel at the scan time), with the zenith capped at **80°** (largest factor ×5.8) so noise near the horizon is
+not blown up. The 3.9 µm temperature channel is not touched: its reflected-sunlight part fades with the sun, which
+removes false reds late in the day. Satpy's own `sunz_corrected` modifier was not used because its default cap is 88°
+(factor ×29), too much amplification. Switch the correction off with the `sun_correction` input
+(`--no-sun-correction` locally). True Color with Rayleigh on (the default) already uses Satpy's sun-angle correction;
+with Rayleigh off it is plain albedo.
+
+**Low-sun warning.** If the sun zenith at the centre or at the west/east edge of the box (at the centre latitude)
+exceeds **75°**, the run prints a warning (a GitHub annotation and a line in the job summary) and the image gets an
+amber caption line, e.g. `LOW SUN: zenith 82° on the west side - dim and noisy there`. The image is still made, since
+the sun is above the horizon; pick a scan nearer local noon for a clean picture. Change the limit with
+`--low-sun-zenith`. (The existing night check, sun below the horizon at the centre, still skips the run.)
 - Brightness temperature is Satpy's calibration of B07. Each run logs each channel's 1st/50th/99th percentile so the
   scaling can be checked.
 
@@ -128,7 +145,8 @@ u, v and surface-pressure messages are fetched with byte-range requests, ~2 MB p
    (e.g. a bbox reaching 15°N needs `4-6`) instead of producing a cropped or blank image.
 3. Night check: if the sun is below the horizon at the bbox centre (`pyorbital` solar zenith ≥ 90°), the run is
    skipped with a notice (job stays green, no image). Near sunrise/sunset the east or west edge of the bbox can still be
-   dark; a warning is printed then. Borneo and Sumatra are ~1.7 h of local time apart.
+   dark; a warning is printed then. Borneo and Sumatra are ~1.7 h of local time apart. A separate low-sun warning
+   (zenith above 75° anywhere along the centre line) is described under Day Fire.
 
 Downloaded HSD files are deleted after processing.
 

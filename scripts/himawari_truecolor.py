@@ -533,9 +533,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sun-correction", action=argparse.BooleanOptionalAction, default=True,
                    help="day_fire only: divide the 0.86/0.64 um channels by cos(sun zenith), capped at 80 deg, so "
                         "brightness does not follow the sun (default on; an addition to the NOAA/CIRA recipe)")
-    p.add_argument("--low-sun-zenith", type=float, default=75.0,
+    p.add_argument("--low-sun-zenith", type=float, default=65.0,
                    help="warn (log, annotation, caption note) when the sun zenith at the bbox centre or its west/east "
-                        "edge exceeds this many degrees; images there are dim and noisy (default 75)")
+                        "edge exceeds this many degrees; the sun-angle correction overshoots and noise grows there "
+                        "(default 65)")
     p.add_argument("--winds", action=argparse.BooleanOptionalAction, default=True,
                    help="overlay ECMWF IFS wind streamlines (default on; skipped with a warning if ECMWF data fail)")
     p.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa for the streamlines")
@@ -610,9 +611,9 @@ def run(args) -> dict:
     if worst > args.low_sun_zenith:
         side = "west" if worst == zen_w else "east" if worst == zen_e else "centre"
         result["low_sun"] = (f"sun zenith {zen_w:.0f}/{sza:.0f}/{zen_e:.0f} deg (west/centre/east), above "
-                             f"{args.low_sun_zenith:g}: the {side} side is dim and noisy")
+                             f"{args.low_sun_zenith:g}: the {side} side is dim or over-corrected and noisy")
         annotate("warning", "Low sun: " + result["low_sun"] + ". Consider a scan nearer local noon.")
-        low_sun_note = (f"LOW SUN: zenith {worst:.0f}\N{DEGREE SIGN} on the {side} side - dim and noisy there",
+        low_sun_note = (f"LOW SUN: zenith {worst:.0f}\N{DEGREE SIGN} on the {side} side - unreliable brightness there",
                         (255, 190, 60, 255))
 
     if args.check_only:

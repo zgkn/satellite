@@ -112,11 +112,19 @@ removes false reds late in the day. Satpy's own `sunz_corrected` modifier was no
 (`--no-sun-correction` locally). True Color with Rayleigh on (the default) already uses Satpy's sun-angle correction;
 with Rayleigh off it is plain albedo.
 
+*How well it works (measured on 21 Oct, median B04 reflectance of clear-sky land, %):* at 04:00 UTC (zenith 11-14°)
+Borneo interior / South Sumatra read 33.7 / 31.8 with the correction. At 08:00 UTC (zenith 58° / 48°) they read
+20.0 / 25.9 without it and 37.6 / 38.8 with it. At 09:00 UTC (zenith 63°, South Sumatra) 22.0 without and 47.8 with it.
+So the correction removes most of the dimming (up to 40 % at 08:00 UTC without it) and lands within about 10-20 % of
+the midday value up to roughly 55-60° zenith, but it **overshoots beyond that** (about +50 % at 63° over smoky South
+Sumatra): haze adds a glow that does not scale with cos(zenith), and dividing by cos amplifies it. This is one day and
+a few clear-sky patches, so treat the numbers as indicative. Past about 60° expect over-bright, cyan-tinted land.
+
 **Low-sun warning.** If the sun zenith at the centre or at the west/east edge of the box (at the centre latitude)
-exceeds **75°**, the run prints a warning (a GitHub annotation and a line in the job summary) and the image gets an
-amber caption line, e.g. `LOW SUN: zenith 82° on the west side - dim and noisy there`. The image is still made, since
-the sun is above the horizon; pick a scan nearer local noon for a clean picture. Change the limit with
-`--low-sun-zenith`. (The existing night check, sun below the horizon at the centre, still skips the run.)
+exceeds **65°** (where the correction was measured to start overshooting), the run prints a warning (a GitHub
+annotation and a line in the job summary) and the image gets an amber caption line, e.g.
+`LOW SUN: zenith 82° on the west side - unreliable brightness there`. The image is still made, since the sun is above
+the horizon; pick a scan nearer local noon for a clean picture. Change the limit with `--low-sun-zenith`. (The existing night check, sun below the horizon at the centre, still skips the run.)
 - Brightness temperature is Satpy's calibration of B07. Each run logs each channel's 1st/50th/99th percentile so the
   scaling can be checked.
 
@@ -146,7 +154,7 @@ u, v and surface-pressure messages are fetched with byte-range requests, ~2 MB p
 3. Night check: if the sun is below the horizon at the bbox centre (`pyorbital` solar zenith ≥ 90°), the run is
    skipped with a notice (job stays green, no image). Near sunrise/sunset the east or west edge of the bbox can still be
    dark; a warning is printed then. Borneo and Sumatra are ~1.7 h of local time apart. A separate low-sun warning
-   (zenith above 75° anywhere along the centre line) is described under Day Fire.
+   (zenith above 65° anywhere along the centre line) is described under Day Fire.
 
 Downloaded HSD files are deleted after processing.
 

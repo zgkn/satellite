@@ -2,7 +2,8 @@
 """Generate a small static site (index.html + thumbnails) from directories of Himawari PNGs.
 
 Each product has a directory holding ``YYYYMMDD_HHMM.png`` files (UTC scan times) plus
-``latest.png``: True Color in the root, Natural Fire Color in ``naturalfire/``.  Used by
+``latest.png``: True Color in the root, Natural Fire Color in ``naturalfire/``, Day Fire in
+``dayfire/``.  Used by
 the Himawari workflow on the ``himawari-output`` branch, which is served by GitHub Pages,
 but it works on any such directory:
 
@@ -32,6 +33,17 @@ FIRE_KEY = (
     ("#000000", "Sea surface"),
 )
 
+# NOAA/CIRA VIIRS Day Fire RGB Quick Guide, "RGB Interpretation" table.
+DAY_FIRE_KEY = (
+    ("#e0202b", "Fire / hot spot"),
+    ("#8f4a3c", "New burn scar"),
+    ("#4a8fd6", "Smoke"),
+    ("#4cf5f5", "Clouds"),
+    ("#2f8f3f", "Healthy vegetation"),
+    ("#6b4a2b", "Bare ground / old burn scar / urban"),
+    ("#050505", "Water"),
+)
+
 SECTIONS = (
     dict(
         key="truecolor", title="True Color", subdir="",
@@ -45,6 +57,15 @@ SECTIONS = (
         key_items=FIRE_KEY,
         note="Water and ice clouds are not distinguished (both cyan), and cloud colour resembles snow/ice. "
              "Hotspots are single 2&nbsp;km pixels, so they are small dots at this scale: open the full-size image.",
+    ),
+    dict(
+        key="dayfire", title="Day Fire", subdir="dayfire",
+        blurb="NOAA/CIRA Day Fire RGB on Himawari bands (R&nbsp;B07 3.9&nbsp;&micro;m thermal, "
+              "G&nbsp;B04 0.86&nbsp;&micro;m, B&nbsp;B03 0.64&nbsp;&micro;m), gamma 0.4/1/1. Fires show red.",
+        key_items=DAY_FIRE_KEY,
+        note="Recipe from the VIIRS Day Fire RGB quick guide. Himawari's 3.9&nbsp;&micro;m band has 2&nbsp;km pixels "
+             "(VIIRS: 375&nbsp;m), so only larger fires show. Warm, sunlit ground can also look red, and thick "
+             "cloud hides fires.",
     ),
 )
 
@@ -81,7 +102,7 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Himawari-9 RGB</title>
-<meta name="description" content="Latest Himawari-9 True Color and Natural Fire Color RGB of Sumatra, the Malay Peninsula, Singapore and Borneo.">
+<meta name="description" content="Latest Himawari-9 True Color, Natural Fire Color and Day Fire RGB of Sumatra, the Malay Peninsula, Singapore and Borneo.">
 <style>
 :root {{ --bg:#f6f7f9; --fg:#14181f; --muted:#5b6573; --card:#fff; --line:#dfe3e8; --accent:#0b63ce; }}
 @media (prefers-color-scheme: dark) {{
@@ -123,7 +144,8 @@ footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 {nav}
 {body}
 <footer>
-  Data: Himawari-9 AHI, JMA / NOAA NODD (<code>s3://noaa-himawari9</code>); recipes: JMA MSC Himawari RGB Quick Guides;
+  Data: Himawari-9 AHI, JMA / NOAA NODD (<code>s3://noaa-himawari9</code>); recipes: JMA MSC Himawari RGB Quick Guides,
+  NOAA/CIRA VIIRS Day Fire RGB Quick Guide;
   coastlines: Natural Earth; wind streamlines: ECMWF open data (CC-BY-4.0).
   Scan times are UTC; SGT = UTC+8. Page updated {built} UTC.
 </footer>

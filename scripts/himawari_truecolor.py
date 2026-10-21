@@ -8,6 +8,9 @@ Products (JMA Himawari RGB Quick Guides; each band: reflectance 0-100 %, clip, /
     true_color          R = B03 (0.64 um), G = B02 (0.51 um), B = B01 (0.47 um), gamma 1.7
     natural_fire_color  R = B06 (2.3 um),  G = B04 (0.86 um), B = B03 (0.64 um), gamma 1.0
                         (fire hotspots red, vegetation green, burn scars brown, smoke teal, clouds cyan)
+    day_fire            R = B07 (3.9 um brightness temperature, 0..60 C, gamma 0.4), G = B04, B = B03
+                        (NOAA/CIRA VIIRS Day Fire RGB recipe on AHI bands: fire red, burn scar reddish
+                        brown, smoke blue, clouds cyan, vegetation green; B07 is 2 km, VIIRS I4 375 m)
 
 The Satpy built-in composites are deliberately NOT used, because they apply extra
 corrections.  The bands are loaded, resampled and stacked by hand.  The reflectance is
@@ -37,15 +40,30 @@ import ecmwf_winds  # noqa: E402
 BUCKET = "noaa-himawari9"
 PRODUCT = "AHI-L1b-FLDK"
 SATELLITE = "H09"
-# bands = (R, G, B); rayleigh = whether the --rayleigh option applies; subdir = folder below --outdir
-# ("" keeps the original True Color file names/links unchanged); coast_rgba = coastline colour,
-# chosen to be absent from the product's own colour key (green would clash with Fire Color vegetation).
+# channels = (R, G, B), each (band, calibration, min, max, gamma): reflectance is in %, brightness
+# temperature in K; the value is scaled min..max -> 0..1 and then raised to 1/gamma.
+# uniform_gamma = whether --gamma may override it (False when the recipe has different gammas per channel).
+# rayleigh = whether the --rayleigh option applies; subdir = folder below --outdir ("" keeps the original
+# True Color file names/links unchanged); coast_rgba = coastline colour, chosen to be absent from the
+# product's own colour key (green would clash with the vegetation in the fire products).
+_REFL, _BT = "reflectance", "brightness_temperature"
 PRODUCTS = {
-    "true_color": dict(label="True Color RGB", bands=("B03", "B02", "B01"), gamma=1.7, rayleigh=True,
-                       subdir="", coast_rgba=(40, 255, 70, 255)),
-    "natural_fire_color": dict(label="Natural Fire Color RGB", bands=("B06", "B04", "B03"), gamma=1.0,
-                               rayleigh=False, subdir="naturalfire", coast_rgba=(255, 60, 255, 255)),
+    "true_color": dict(
+        label="True Color RGB", recipe="JMA recipe", uniform_gamma=True, rayleigh=True,
+        channels=(("B03", _REFL, 0, 100, 1.7), ("B02", _REFL, 0, 100, 1.7), ("B01", _REFL, 0, 100, 1.7)),
+        subdir="", coast_rgba=(40, 255, 70, 255)),
+    "natural_fire_color": dict(
+        label="Natural Fire Color RGB", recipe="JMA recipe", uniform_gamma=True, rayleigh=False,
+        channels=(("B06", _REFL, 0, 100, 1.0), ("B04", _REFL, 0, 100, 1.0), ("B03", _REFL, 0, 100, 1.0)),
+        subdir="naturalfire", coast_rgba=(255, 60, 255, 255)),
+    # NOAA/CIRA "VIIRS Day Fire RGB" quick guide, with AHI band 7 (3.9 um, 2 km) for VIIRS 3.7 um (375 m).
+    "day_fire": dict(
+        label="Day Fire RGB", recipe="NOAA/CIRA recipe, AHI bands", uniform_gamma=False, rayleigh=False,
+        channels=(("B07", _BT, 273.15, 333.15, 0.4), ("B04", _REFL, 0, 100, 1.0), ("B03", _REFL, 0, 100, 1.0)),
+        subdir="dayfire", coast_rgba=(255, 60, 255, 255)),
 }
+for _p in PRODUCTS.values():
+    _p["bands"] = tuple(c[0] for c in _p["channels"])  # (R, G, B) bands
 N_SEGMENTS = 10  # full disk is split into 10 equal N-S segments, 01 = north
 # Full-disk extent in geostationary projection y (metres, +north).  Verified
 # against the area extents Satpy reports for real data (see check_loaded_coverage).
@@ -289,8 +307,11 @@ def band_of(path: Path) -> str | None:
     return f"B{m['band']}" if m else None
 
 
-def make_rgb(files, bbox, resolution, product, gamma, rayleigh):
-    """Return a uint8 (H, W, 3) array for ``product`` (a PRODUCTS entry) over the bbox."""
+def make_rgb(files, bbox, resolution, product, gammas, rayleigh):
+    """Return a uint8 (H, W, 3) array for ``product`` (a PRODUCTS entry) over the bbox.
+
+    ``gammas`` is the (R, G, B) gamma triple.
+    """
     import dask
     import numpy as np
     from pyresample.geometry import AreaDefinition
@@ -309,13 +330,15 @@ def make_rgb(files, bbox, resolution, product, gamma, rayleigh):
     log(f"Target grid: {width} x {height} px at {resolution}\N{DEGREE SIGN}")
 
     bands = product["bands"]  # (R, G, B)
+    channels = product["channels"]
     # Only this product's files, so each Scene decompresses just what it needs.
     scn = Scene(filenames=[str(f) for f in files if band_of(f) in bands], reader="ahi_hsd")
     if rayleigh:
         # The Rayleigh modifier requires sun-zenith-corrected reflectance as input.
         scn.load(list(bands), calibration="reflectance", modifiers=("sunz_corrected", "rayleigh_corrected"))
     else:
-        scn.load(list(bands), calibration="reflectance")
+        for cal in dict.fromkeys(c[1] for c in channels):  # one load per calibration, in channel order
+            scn.load([c[0] for c in channels if c[1] == cal], calibration=cal)
 
     check_loaded_coverage(scn[bands[0]].attrs["area"], bbox)
 
@@ -326,9 +349,15 @@ def make_rgb(files, bbox, resolution, product, gamma, rayleigh):
     bad = float(np.isnan(rgb).any(axis=-1).mean())
     if bad > 0.01:
         annotate("warning", f"{bad:.1%} of pixels have no data (shown black)")
-    rgb = np.nan_to_num(np.clip(rgb, 0.0, 100.0), nan=0.0) / 100.0
-    rgb = np.power(rgb, 1.0 / gamma)
-    return np.round(rgb * 255.0).astype("uint8")
+    out = np.empty_like(rgb)
+    for i, (band, cal, vmin, vmax, _) in enumerate(channels):
+        p1, p50, p99 = np.nanpercentile(rgb[..., i], [1, 50, 99])
+        log(f"  {band} {'K' if cal == _BT else '%'}: p1 {p1:.1f}  median {p50:.1f}  p99 {p99:.1f}  "
+            f"(scaled {vmin:g}..{vmax:g})")
+    for i, (_, _, vmin, vmax, _) in enumerate(channels):
+        scaled = np.nan_to_num(np.clip((rgb[..., i] - vmin) / (vmax - vmin), 0.0, 1.0), nan=0.0)
+        out[..., i] = np.power(scaled, 1.0 / gammas[i])
+    return np.round(out * 255.0).astype("uint8")
 
 
 def _font(size: int):
@@ -375,7 +404,11 @@ def draw_coastline(img, bbox, resolution: float, width_px: float, rgba):
     return img
 
 
-def overlay_and_save(rgb, scan: dt.datetime, product: dict, gamma: float, rayleigh: bool, out: Path,
+def gamma_text(gammas) -> str:
+    return f"{gammas[0]:g}" if len(set(gammas)) == 1 else "/".join(f"{g:g}" for g in gammas)
+
+
+def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bool, out: Path,
                      bbox=None, resolution=None, coast_width: float = 0.0,
                      wind=None, wind_spacing: float = 45.0) -> None:
     from PIL import Image, ImageDraw
@@ -393,7 +426,7 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gamma: float, raylei
     lines = [
         ("Himawari-9 AHI, JMA / NOAA NODD", big, white),
         (f"{scan:%Y-%m-%d %H:%M} UTC  /  {sgt:%Y-%m-%d %H:%M} SGT", big, white),
-        (f"{product['label']} (JMA recipe)  gamma {gamma:g}"
+        (f"{product['label']} ({product['recipe']})  gamma {gamma_text(gammas)}"
          + (f"  Rayleigh {'on' if rayleigh else 'off'}" if product["rayleigh"] else
             f"  R {product['bands'][0]} G {product['bands'][1]} B {product['bands'][2]}"), small, white),
     ]
@@ -420,10 +453,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--datetime-utc", default="", help="scan time YYYYMMDDHHMM (UTC); blank = newest complete scan")
     p.add_argument("--bbox", default="94.5,-6.5,119.5,7.5", help="west,south,east,north in degrees")
-    p.add_argument("--product", choices=(*PRODUCTS, "both"), default="both",
-                   help="which image(s) to build (default: both)")
+    p.add_argument("--product", choices=(*PRODUCTS, "all"), default="all",
+                   help="which image(s) to build (default: all)")
     p.add_argument("--gamma", type=float, default=None,
-                   help="gamma override for every selected product; default per product "
+                   help="gamma override for true_color and natural_fire_color (day_fire has per-channel "
+                        "gammas 0.4/1/1 and ignores it); default per product "
                         "(1.7 true_color - 2.0 can help with haze; 1.0 natural_fire_color)")
     p.add_argument("--segments", default="5-6", help="full-disk segments to download, e.g. 5-6")
     p.add_argument("--resolution", type=float, default=0.01, help="output pixel size in degrees (0.01 ~ 1 km)")
@@ -453,7 +487,7 @@ def run(args) -> dict:
         raise UserError(f"resolution must be between 0.001 and 1 degrees, got {args.resolution}")
     if args.gamma is not None and not 0.2 <= args.gamma <= 5:
         raise UserError(f"gamma must be between 0.2 and 5, got {args.gamma}")
-    products = list(PRODUCTS) if args.product == "both" else [args.product]
+    products = list(PRODUCTS) if args.product == "all" else [args.product]
     bands = sorted({b for p in products for b in PRODUCTS[p]["bands"]})
     if args.winds and args.wind_level not in ecmwf_winds.PRESSURE_LEVELS:
         raise UserError(f"wind level must be one of {ecmwf_winds.PRESSURE_LEVELS} hPa, got {args.wind_level}")
@@ -521,14 +555,19 @@ def run(args) -> dict:
         coast_width = args.coast_width if args.coastlines else 0.0
         for name in products:
             prod = PRODUCTS[name]
-            gamma = args.gamma if args.gamma is not None else prod["gamma"]
+            gammas = tuple(c[4] for c in prod["channels"])
+            if args.gamma is not None:
+                if prod["uniform_gamma"]:
+                    gammas = (args.gamma,) * 3
+                else:
+                    log(f"--gamma ignored for {prod['label']}: its recipe has per-channel gammas {gamma_text(gammas)}")
             use_rayleigh = bool(args.rayleigh and prod["rayleigh"])
-            log(f"--- {prod['label']}: R/G/B = {'/'.join(prod['bands'])}, gamma {gamma:g}"
+            log(f"--- {prod['label']}: R/G/B = {'/'.join(prod['bands'])}, gamma {gamma_text(gammas)}"
                 + (f", Rayleigh {'on' if use_rayleigh else 'off'}" if prod["rayleigh"] else ""))
-            rgb = make_rgb(files, bbox, args.resolution, prod, gamma, use_rayleigh)
+            rgb = make_rgb(files, bbox, args.resolution, prod, gammas, use_rayleigh)
             out = Path(args.outdir) / prod["subdir"] / f"{scan:%Y%m%d_%H%M}.png"
             try:
-                overlay_and_save(rgb, scan, prod, gamma, use_rayleigh, out, bbox, args.resolution,
+                overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution,
                                  coast_width, wind, args.wind_spacing)
             except Exception as exc:  # noqa: BLE001
                 if wind is None:
@@ -537,10 +576,11 @@ def run(args) -> dict:
                 annotate("warning", f"Drawing wind streamlines failed ({type(exc).__name__}: {exc}); "
                          "publishing without them.")
                 wind = None  # later products skip them too
-                overlay_and_save(rgb, scan, prod, gamma, use_rayleigh, out, bbox, args.resolution, coast_width)
+                overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution, coast_width)
             result["outputs"].append({
                 "product": name, "label": prod["label"], "png": str(out), "subdir": prod["subdir"],
-                "size_px": [int(rgb.shape[1]), int(rgb.shape[0])], "gamma": gamma, "rayleigh": use_rayleigh,
+                "size_px": [int(rgb.shape[1]), int(rgb.shape[0])], "gamma": gamma_text(gammas),
+                "rayleigh": use_rayleigh,
             })
             log(f"Wrote {out} ({out.stat().st_size / 1e6:.1f} MB, {rgb.shape[1]}x{rgb.shape[0]})")
     finally:

@@ -11,21 +11,22 @@ on:
         default: ""
         type: string
       product:
-        description: "Which image(s): both, true_color or natural_fire_color (fire hotspots, burn scars, smoke)"
+        description: "Which image(s): all, true_color, natural_fire_color or day_fire (3.9 um hotspots)"
         required: false
-        default: both
+        default: all
         type: choice
         options:
-          - both
+          - all
           - true_color
           - natural_fire_color
+          - day_fire
       bbox:
         description: "Region west,south,east,north in degrees (default: Sumatra, Malay Peninsula, Singapore, Borneo)"
         required: false
         default: "94.5,-6.5,119.5,7.5"
         type: string
       gamma:
-        description: "Gamma override. Blank = each product's default (1.7 true color, 1.0 fire color); try 2.0 for hazy true color"
+        description: "Gamma override for true color / natural fire color (blank = 1.7 / 1.0; try 2.0 for hazy true color). Day fire ignores it"
         required: false
         default: ""
         type: string
@@ -45,7 +46,7 @@ on:
         default: true
         type: boolean
       coastlines:
-        description: "Draw coastlines (Natural Earth 1:10m; green, or magenta on fire color); untick for clean images"
+        description: "Draw coastlines (Natural Earth 1:10m; green, or magenta on the fire products); untick for clean images"
         required: false
         default: true
         type: boolean
@@ -89,7 +90,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Cache pyspectral data (Rayleigh LUTs)
-        if: ${{ inputs.rayleigh && inputs.product != 'natural_fire_color' }}
+        if: ${{ inputs.rayleigh && (inputs.product == 'all' || inputs.product == 'true_color') }}
         uses: actions/cache@v4
         with:
           path: .pyspectral-data
@@ -142,6 +143,7 @@ jobs:
           path: |
             output/*.png
             output/naturalfire/*.png
+            output/dayfire/*.png
           if-no-files-found: error
           retention-days: 30
 

@@ -29,6 +29,11 @@ on:
         required: false
         default: "0.01"
         type: string
+      winds:
+        description: "Overlay ECMWF 925 hPa wind streamlines (orange). If ECMWF data fail the image is still published without them"
+        required: false
+        default: true
+        type: boolean
       coastlines:
         description: "Draw green coastlines (Natural Earth 1:10m); untick for a clean image"
         required: false
@@ -90,6 +95,7 @@ jobs:
           IN_RESOLUTION: ${{ inputs.resolution }}
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
           IN_COASTLINES: ${{ inputs.coastlines }}
+          IN_WINDS: ${{ inputs.winds }}
         run: |
           args=(
             --datetime-utc "$IN_DATETIME"
@@ -103,6 +109,7 @@ jobs:
           )
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
           if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
+          if [ "$IN_WINDS" = "true" ]; then args+=(--winds); else args+=(--no-winds); fi
           python scripts/himawari_truecolor.py "${args[@]}"
 
       - name: Read result
@@ -178,7 +185,8 @@ jobs:
                 echo "**Scan:** $(jq -r .scan_utc_iso $r) / $(jq -r .scan_sgt_iso $r)  "
                 echo "**Image:** \`$OUTPUT_BRANCH:$name\` ($(jq -r '.size_px | "\(.[0])x\(.[1])"' $r) px)  "
                 echo "**Sun zenith at bbox centre:** $(jq -r .sun_zenith_centre $r)°  "
-                echo "**Segments:** $(jq -r '.segments | map(tostring) | join(",")' $r), bands B01/B02/B03 (all files present)"
+                echo "**Segments:** $(jq -r '.segments | map(tostring) | join(",")' $r), bands B01/B02/B03 (all files present)  "
+                echo "**Winds:** $(jq -r '.winds // "n/a"' $r)"
                 echo
                 echo "- [This image]($SERVER/$REPO/blob/$OUTPUT_BRANCH/$name)"
                 echo "- [latest.png]($SERVER/$REPO/blob/$OUTPUT_BRANCH/latest.png)"

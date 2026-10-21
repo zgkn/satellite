@@ -28,6 +28,9 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling modules, wherever it is run from
+import ecmwf_winds  # noqa: E402
+
 BUCKET = "noaa-himawari9"
 PRODUCT = "AHI-L1b-FLDK"
 SATELLITE = "H09"
@@ -357,32 +360,38 @@ def draw_coastline(img, bbox, resolution: float, width_px: float):
 
 
 def overlay_and_save(rgb, scan: dt.datetime, gamma: float, rayleigh: bool, out: Path,
-                     bbox=None, resolution=None, coast_width: float = 0.0) -> None:
+                     bbox=None, resolution=None, coast_width: float = 0.0,
+                     wind=None, wind_spacing: float = 45.0) -> None:
     from PIL import Image, ImageDraw
 
     img = Image.fromarray(rgb, "RGB").convert("RGBA")
+    if wind is not None:  # layer order: image, streamlines, coastlines, text
+        img = ecmwf_winds.draw_streamlines(img, wind, bbox, resolution, wind_spacing)
     if coast_width > 0:
         draw_coastline(img, bbox, resolution, coast_width)
     h = rgb.shape[0]
     size = max(12, round(h / 48))
     big, small = _font(size), _font(round(size * 0.8))
     sgt = scan.astimezone(SGT)
+    white = (255, 255, 255, 255)
     lines = [
-        ("Himawari-9 AHI, JMA / NOAA NODD", big),
-        (f"{scan:%Y-%m-%d %H:%M} UTC  /  {sgt:%Y-%m-%d %H:%M} SGT", big),
-        (f"True Color RGB (JMA recipe)  gamma {gamma:g}  Rayleigh {'on' if rayleigh else 'off'}", small),
+        ("Himawari-9 AHI, JMA / NOAA NODD", big, white),
+        (f"{scan:%Y-%m-%d %H:%M} UTC  /  {sgt:%Y-%m-%d %H:%M} SGT", big, white),
+        (f"True Color RGB (JMA recipe)  gamma {gamma:g}  Rayleigh {'on' if rayleigh else 'off'}", small, white),
     ]
+    if wind is not None:  # the line doubles as the legend: same colour as the streamlines
+        lines.append((f"Streamlines: {wind.describe()}", small, (*ecmwf_winds.LINE_RGB, 255)))
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     pad, gap = size // 2, size // 4
-    boxes = [d.textbbox((0, 0), t, font=f) for t, f in lines]
+    boxes = [d.textbbox((0, 0), t, font=f) for t, f, _ in lines]
     bw = max(b[2] - b[0] for b in boxes) + 2 * pad
     bh = sum(b[3] - b[1] for b in boxes) + gap * (len(lines) - 1) + 2 * pad
     x0, y0 = pad, img.height - bh - pad
     d.rectangle([x0, y0, x0 + bw, y0 + bh], fill=(0, 0, 0, 140))
     y = y0 + pad
-    for (text, font), b in zip(lines, boxes):
-        d.text((x0 + pad - b[0], y - b[1]), text, font=font, fill=(255, 255, 255, 255))
+    for (text, font, fill), b in zip(lines, boxes):
+        d.text((x0 + pad - b[0], y - b[1]), text, font=font, fill=fill)
         y += b[3] - b[1] + gap
     out.parent.mkdir(parents=True, exist_ok=True)
     Image.alpha_composite(img, layer).convert("RGB").save(out, optimize=True)
@@ -401,6 +410,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--coastlines", action=argparse.BooleanOptionalAction, default=True,
                    help="draw green Natural Earth 1:10m coastlines (default on)")
     p.add_argument("--coast-width", type=float, default=1.5, help="coastline width in output pixels")
+    p.add_argument("--winds", action=argparse.BooleanOptionalAction, default=True,
+                   help="overlay ECMWF IFS wind streamlines (default on; skipped with a warning if ECMWF data fail)")
+    p.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa for the streamlines")
+    p.add_argument("--wind-spacing", type=float, default=45.0, help="approximate streamline spacing in output pixels")
     p.add_argument("--outdir", default="output", help="directory for the PNG")
     p.add_argument("--workdir", default=None, help="scratch directory for HSD files (deleted afterwards)")
     p.add_argument("--lookback-hours", type=float, default=3.0, help="how far back to look for the newest scan")
@@ -416,6 +429,10 @@ def run(args) -> dict:
         raise UserError(f"resolution must be between 0.001 and 1 degrees, got {args.resolution}")
     if not 0.2 <= args.gamma <= 5:
         raise UserError(f"gamma must be between 0.2 and 5, got {args.gamma}")
+    if args.winds and args.wind_level not in ecmwf_winds.PRESSURE_LEVELS:
+        raise UserError(f"wind level must be one of {ecmwf_winds.PRESSURE_LEVELS} hPa, got {args.wind_level}")
+    if not 10 <= args.wind_spacing <= 400:
+        raise UserError(f"wind spacing must be between 10 and 400 px, got {args.wind_spacing}")
     requested = parse_scan_time(args.datetime_utc) if args.datetime_utc.strip() else None
 
     check_segments_cover_bbox(bbox, segments)
@@ -463,8 +480,29 @@ def run(args) -> dict:
         files = download(s3, keys, work / "hsd")
         rgb = make_rgb(files, bbox, args.resolution, args.gamma, args.rayleigh)
         out = Path(args.outdir) / f"{scan:%Y%m%d_%H%M}.png"
-        overlay_and_save(rgb, scan, args.gamma, args.rayleigh, out, bbox, args.resolution,
-                         args.coast_width if args.coastlines else 0.0)
+        wind = None
+        result["winds"] = "off"
+        if args.winds:
+            # The satellite image is the main product: a wind problem must not lose it.
+            try:
+                wind = ecmwf_winds.fetch_winds(s3, scan, args.wind_level, bbox)
+                result["winds"] = wind.describe()
+                log(f"Winds: {wind.describe()}")
+            except Exception as exc:  # noqa: BLE001 - deliberately broad, see above
+                result["winds"] = f"skipped: {exc}"
+                annotate("warning", f"Wind streamlines skipped ({type(exc).__name__}: {exc}); "
+                         "the image is published without them.")
+        try:
+            overlay_and_save(rgb, scan, args.gamma, args.rayleigh, out, bbox, args.resolution,
+                             args.coast_width if args.coastlines else 0.0, wind, args.wind_spacing)
+        except Exception as exc:  # noqa: BLE001
+            if wind is None:
+                raise
+            result["winds"] = f"skipped: drawing failed: {exc}"
+            annotate("warning", f"Drawing wind streamlines failed ({type(exc).__name__}: {exc}); "
+                     "publishing without them.")
+            overlay_and_save(rgb, scan, args.gamma, args.rayleigh, out, bbox, args.resolution,
+                             args.coast_width if args.coastlines else 0.0)
     finally:
         shutil.rmtree(work, ignore_errors=True)
         if old_tmp is None:

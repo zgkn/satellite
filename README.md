@@ -39,6 +39,7 @@ to redeploy). Note that Pages sites are public, and on a private repository Page
 | `gamma` | `1.7` | Gamma. Try `2.0` for hazy scenes. |
 | `segments` | `5-6` | Full-disk segments to download (1 = north … 10 = south). 5-6 cover roughly 10°N-10°S. |
 | `resolution` | `0.01` | Output pixel size in degrees (0.01° ≈ 1 km, giving about 2500 × 1400 px for the default bbox). |
+| `winds` | **on** | Overlay thin orange streamlines of ECMWF IFS 925 hPa wind (see below). If the ECMWF data cannot be fetched the run still publishes the image, without winds, and prints a warning. Locally: `--no-winds`, `--wind-level` (hPa), `--wind-spacing` (px). |
 | `coastlines` | **on** | Draw green coastlines from Natural Earth 1:10m (public domain, stored in `data/ne_10m_coastline.zip`) at 1.5 px width. Untick for a clean image. Locally: `--no-coastlines`, `--coast-width`. |
 | `rayleigh` | **on** | Apply Satpy's Rayleigh correction, which removes the blue atmospheric haze. It also applies the sun-zenith correction the modifier requires. Untick it for the plain JMA recipe (no Rayleigh, as in the quick guide), which is a bit faster. The first run downloads look-up tables; later runs reuse the cache. |
 
@@ -46,6 +47,22 @@ Scan times are always UTC. Himawari data appear in the bucket roughly 20-30 min 
 UTC** full-disk scans are missing from the bucket every day (10:40 and 22:40 SGT; presumably satellite housekeeping),
 so asking for those exact times fails with a "no files found" message; use the scan before or after. A blank
 `datetime_utc` handles this automatically by walking back to the newest complete scan.
+
+### Wind streamlines
+
+Source: ECMWF open data (IFS, 0.25° ≈ 28 km) from the public bucket `s3://ecmwf-forecasts` (anonymous; only the
+u, v and surface-pressure messages are fetched with byte-range requests, ~2 MB per forecast step).
+
+- **Which forecast:** the newest published run (00/06/12/18 UTC) that started at or before the scan time. For a live
+  scan that is a run from roughly 6-12 h earlier (publication lag); for an older scan it is a run just before it, so the
+  forecast step is short. Winds are linearly interpolated in time between the two 3-hourly steps that bracket the
+  scan time. The caption line shows the run and steps used, e.g. `run 21 Oct 00Z, +0/+3 h`.
+- **Mountains:** where 925 hPa (~750 m) is below the ground (parts of the Barisan range, Borneo highlands) the model
+  values are extrapolated, so streamlines are left out there instead of showing made-up winds.
+- **Look:** orange lines with a faint dark edge, about 1-2 px wide (stronger wind = slightly thicker), about 45 px
+  apart, with arrowheads showing direction. Layer order: image, streamlines, coastlines, caption.
+- ECMWF data are CC-BY-4.0. It is a model field, not an observation, so streamlines can disagree with what the
+  clouds show.
 
 ### What it checks
 

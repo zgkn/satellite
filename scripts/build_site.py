@@ -94,7 +94,7 @@ footer {{ margin-top:32px; color:var(--muted); font-size:.85rem; }}
 </section>
 {gallery}
 <footer>
-  Data: Himawari-9 AHI, JMA / NOAA NODD (<code>s3://noaa-himawari9</code>); coastlines: Natural Earth.
+  Data: Himawari-9 AHI, JMA / NOAA NODD (<code>s3://noaa-himawari9</code>); coastlines: Natural Earth; wind streamlines: ECMWF open data (CC-BY-4.0).
   Scan times are UTC; SGT = UTC+8.
   Page updated {built} UTC.
 </footer>

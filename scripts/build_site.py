@@ -60,11 +60,12 @@ SECTIONS = (
     ),
     dict(
         key="dayfire", title="Day Fire", subdir="dayfire",
-        blurb="NOAA/CIRA Day Fire RGB on Himawari bands (R&nbsp;B07 3.9&nbsp;&micro;m thermal, "
+        blurb="NOAA/CIRA Day Fire RGB on Himawari bands (R&nbsp;B07 3.9&nbsp;&micro;m thermal, scaled 27&ndash;60&nbsp;&deg;C, "
               "G&nbsp;B04 0.86&nbsp;&micro;m, B&nbsp;B03 0.64&nbsp;&micro;m), gamma 0.4/1/1. Fires show red.",
         key_items=DAY_FIRE_KEY,
-        note="Recipe from the VIIRS Day Fire RGB quick guide. Himawari's 3.9&nbsp;&micro;m band has 2&nbsp;km pixels "
-             "(VIIRS: 375&nbsp;m), so only larger fires show. Warm, sunlit ground can also look red, and thick "
+        note="Recipe from the VIIRS Day Fire RGB quick guide, with the red minimum raised from 0 to 27&nbsp;&deg;C so "
+             "tropical sea stays black. Himawari's 3.9&nbsp;&micro;m band has 2&nbsp;km pixels (VIIRS: 375&nbsp;m), "
+             "so only larger fires show. Warm, sunlit ground and sun glint on water can also look red, and thick "
              "cloud hides fires.",
     ),
 )

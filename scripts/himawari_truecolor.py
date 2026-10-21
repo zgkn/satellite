@@ -8,9 +8,10 @@ Products (JMA Himawari RGB Quick Guides; each band: reflectance 0-100 %, clip, /
     true_color          R = B03 (0.64 um), G = B02 (0.51 um), B = B01 (0.47 um), gamma 1.7
     natural_fire_color  R = B06 (2.3 um),  G = B04 (0.86 um), B = B03 (0.64 um), gamma 1.0
                         (fire hotspots red, vegetation green, burn scars brown, smoke teal, clouds cyan)
-    day_fire            R = B07 (3.9 um brightness temperature, 0..60 C, gamma 0.4), G = B04, B = B03
+    day_fire            R = B07 (3.9 um brightness temperature, 27..60 C, gamma 0.4), G = B04, B = B03
                         (NOAA/CIRA VIIRS Day Fire RGB recipe on AHI bands: fire red, burn scar reddish
-                        brown, smoke blue, clouds cyan, vegetation green; B07 is 2 km, VIIRS I4 375 m)
+                        brown, smoke blue, clouds cyan, vegetation green; B07 is 2 km, VIIRS I4 375 m;
+                        the guide's red minimum is 0 C, raised to 27 C for the tropics)
 
 The Satpy built-in composites are deliberately NOT used, because they apply extra
 corrections.  The bands are loaded, resampled and stacked by hand.  The reflectance is
@@ -57,9 +58,12 @@ PRODUCTS = {
         channels=(("B06", _REFL, 0, 100, 1.0), ("B04", _REFL, 0, 100, 1.0), ("B03", _REFL, 0, 100, 1.0)),
         subdir="naturalfire", coast_rgba=(255, 60, 255, 255)),
     # NOAA/CIRA "VIIRS Day Fire RGB" quick guide, with AHI band 7 (3.9 um, 2 km) for VIIRS 3.7 um (375 m).
+    # The guide scales the red channel 0..60 C; here the minimum is raised to 27 C (300.15 K) because tropical
+    # sea and land sit at ~27 C and above at 3.9 um, which turned all water dark red (tested on a real scan:
+    # sea red 35 -> 0, hotspots unchanged). Everything else is as in the guide.
     "day_fire": dict(
         label="Day Fire RGB", recipe="NOAA/CIRA recipe, AHI bands", uniform_gamma=False, rayleigh=False,
-        channels=(("B07", _BT, 273.15, 333.15, 0.4), ("B04", _REFL, 0, 100, 1.0), ("B03", _REFL, 0, 100, 1.0)),
+        channels=(("B07", _BT, 300.15, 333.15, 0.4), ("B04", _REFL, 0, 100, 1.0), ("B03", _REFL, 0, 100, 1.0)),
         subdir="dayfire", coast_rgba=(255, 60, 255, 255)),
 }
 for _p in PRODUCTS.values():
@@ -428,7 +432,8 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
         (f"{scan:%Y-%m-%d %H:%M} UTC  /  {sgt:%Y-%m-%d %H:%M} SGT", big, white),
         (f"{product['label']} ({product['recipe']})  gamma {gamma_text(gammas)}"
          + (f"  Rayleigh {'on' if rayleigh else 'off'}" if product["rayleigh"] else
-            f"  R {product['bands'][0]} G {product['bands'][1]} B {product['bands'][2]}"), small, white),
+            "  " + " ".join(f"{k} {band}" + (f" {vmin - 273.15:.0f}-{vmax - 273.15:.0f}C" if cal == _BT else "")
+                             for k, (band, cal, vmin, vmax, _) in zip("RGB", product["channels"]))), small, white),
     ]
     if wind is not None:  # the line doubles as the legend: same colour as the streamlines
         lines.append((f"Streamlines: {wind.describe()}", small, (*ecmwf_winds.LINE_RGB, 255)))

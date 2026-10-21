@@ -12,7 +12,7 @@ corrections). Daytime only.
 |---|---|---|---|---|---|---|
 | `true_color` | B03 0.64 µm | B02 0.51 µm | B01 0.47 µm | 1.7 | JMA | Natural-looking picture |
 | `natural_fire_color` | B06 2.3 µm | B04 0.86 µm | B03 0.64 µm | 1.0 | JMA | Fire hotspots, burn scars, smoke, vegetation |
-| `day_fire` | B07 3.9 µm (0-60 °C) | B04 0.86 µm | B03 0.64 µm | 0.4 / 1 / 1 | NOAA/CIRA (VIIRS Day Fire RGB, on AHI bands) | Thermal hotspots |
+| `day_fire` | B07 3.9 µm (27-60 °C) | B04 0.86 µm | B03 0.64 µm | 0.4 / 1 / 1 | NOAA/CIRA (VIIRS Day Fire RGB, on AHI bands; red minimum raised from 0 to 27 °C for the tropics) | Thermal hotspots |
 
 ### How to run it
 
@@ -81,8 +81,15 @@ gets darker as the sun gets lower (late afternoon, the east/west edges).
 ### Day Fire
 
 Recipe from the NOAA/CIRA *VIIRS Day Fire RGB Quick Guide*, run on Himawari bands: R = 3.9 µm brightness temperature
-scaled 0 to 60 °C with gamma 0.4, G = 0.86 µm and B = 0.64 µm scaled 0-100 % with gamma 1. Gamma is applied as
-`value^(1/gamma)`, as in the other products, so the red channel stays dark except over genuinely hot pixels.
+with gamma 0.4, G = 0.86 µm and B = 0.64 µm scaled 0-100 % with gamma 1. Gamma is applied as `value^(1/gamma)`, as
+in the other products, so the red channel stays dark except over genuinely hot pixels.
+
+**One deliberate change from the guide:** the red channel is scaled **27 to 60 °C**, not 0 to 60 °C. In the tropics
+the sea and land are already about 27 °C and warmer at 3.9 µm, so with a 0 °C minimum every water pixel came out dark
+red instead of the guide's "nearly black" (tested on the 08:00 UTC scan on 2026-10-21: sea red 35/255 → 0, the weak
+red tint over land and sea dropped by ~98 %, and the saturated hotspots were unchanged). The caption on the image
+shows the range (`R B07 27-60C`). To get the guide's exact scaling, set the minimum back to `273.15` in
+`PRODUCTS["day_fire"]` in `scripts/himawari_truecolor.py`.
 
 | Colour | Meaning |
 |---|---|

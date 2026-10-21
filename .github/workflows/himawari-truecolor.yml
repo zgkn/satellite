@@ -50,6 +50,11 @@ on:
         required: false
         default: true
         type: boolean
+      cloud_cue:
+        description: "Day fire only: show cold cloud (10.4 um below ~290 K) in grey so it stands apart from smoke"
+        required: false
+        default: true
+        type: boolean
       rayleigh:
         description: "True color only: apply Rayleigh correction (on by default; untick for the plain JMA recipe, a bit faster)"
         required: false
@@ -108,6 +113,7 @@ jobs:
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
           IN_COASTLINES: ${{ inputs.coastlines }}
           IN_WINDS: ${{ inputs.winds }}
+          IN_CLOUD_CUE: ${{ inputs.cloud_cue }}
         run: |
           args=(
             --datetime-utc "$IN_DATETIME"
@@ -123,6 +129,7 @@ jobs:
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
           if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
           if [ "$IN_WINDS" = "true" ]; then args+=(--winds); else args+=(--no-winds); fi
+          if [ "$IN_CLOUD_CUE" = "true" ]; then args+=(--cloud-cue); else args+=(--no-cloud-cue); fi
           python scripts/himawari_truecolor.py "${args[@]}"
 
       - name: Read result

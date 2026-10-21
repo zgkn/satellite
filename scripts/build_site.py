@@ -38,7 +38,8 @@ DAY_FIRE_KEY = (
     ("#e0202b", "Fire / hot spot"),
     ("#8f4a3c", "New burn scar"),
     ("#4a8fd6", "Smoke"),
-    ("#4cf5f5", "Clouds"),
+    ("#4cf5f5", "Low / warm cloud"),
+    ("#c8c8c8", "Cold cloud (10.4 &micro;m below ~290 K, added)"),
     ("#2f8f3f", "Healthy vegetation"),
     ("#6b4a2b", "Bare ground / old burn scar / urban"),
     ("#050505", "Water"),
@@ -64,9 +65,10 @@ SECTIONS = (
               "G&nbsp;B04 0.86&nbsp;&micro;m, B&nbsp;B03 0.64&nbsp;&micro;m), gamma 0.4/1/1. Fires show red.",
         key_items=DAY_FIRE_KEY,
         note="Recipe from the VIIRS Day Fire RGB quick guide, with the red minimum raised from 0 to 27&nbsp;&deg;C so "
-             "tropical sea stays black. Himawari's 3.9&nbsp;&micro;m band has 2&nbsp;km pixels (VIIRS: 375&nbsp;m), "
-             "so only larger fires show. Warm, sunlit ground and sun glint on water can also look red, and thick "
-             "cloud hides fires.",
+             "tropical sea stays black. Over forest, smoke and cloud come out the same teal, so cold cloud "
+             "(10.4&nbsp;&micro;m below ~290&nbsp;K) is shown grey; smoke and low, warm cloud keep their colour. "
+             "Himawari's 3.9&nbsp;&micro;m band has 2&nbsp;km pixels (VIIRS: 375&nbsp;m), so only larger fires show. "
+             "Warm, sunlit ground and sun glint on water can also look red, and thick cloud hides fires.",
     ),
 )
 
@@ -164,7 +166,7 @@ def section_html(sec: dict, folder: Path, names: list[str]) -> str:
 
     key = ""
     if sec["key_items"]:
-        items = "".join(f'<li><i style="background:{c}"></i>{html.escape(t)}</li>' for c, t in sec["key_items"])
+        items = "".join(f'<li><i style="background:{c}"></i>{t}</li>' for c, t in sec["key_items"])
         key = f'<ul class="key">{items}</ul>'
     note = f'<p class="note">{sec["note"]}</p>' if sec["note"] else ""
 

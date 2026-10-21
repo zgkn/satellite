@@ -374,7 +374,10 @@ def make_rgb(files, bbox, resolution, product, gammas, rayleigh, cue=None):
     if cue:
         # Cold (= high/thick) cloud -> grey, keeping its brightness texture; smoke and ground stay as they are.
         band, warm, cold = cue
-        weight = np.nan_to_num(np.clip((warm - cue_bt) / (warm - cold), 0.0, 1.0), nan=0.0)[..., None]
+        weight = np.nan_to_num(np.clip((warm - cue_bt) / (warm - cold), 0.0, 1.0), nan=0.0)
+        # Never grey out a hotspot: red (scaled 3.9 um) above 0.35 starts to protect, from 0.65 fully
+        # (0.35 ~ 49 C on the 27-60 C scale), even if the 10.4 um temperature there is cold (cloud or plume above).
+        weight = (weight * (1.0 - np.clip((out[..., 0] - 0.35) / 0.30, 0.0, 1.0)))[..., None]
         grey = np.maximum(out[..., 1], out[..., 2])[..., None]
         out = (1.0 - weight) * out + weight * grey
         log(f"  cloud cue: {band} < {warm:g} K blends to grey, fully by {cold:g} K "

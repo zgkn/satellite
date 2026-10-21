@@ -357,7 +357,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--gamma", type=float, default=1.7, help="gamma (1.7 default; 2.0 can help with haze)")
     p.add_argument("--segments", default="5-6", help="full-disk segments to download, e.g. 5-6")
     p.add_argument("--resolution", type=float, default=0.01, help="output pixel size in degrees (0.01 ~ 1 km)")
-    p.add_argument("--rayleigh", action="store_true", help="apply Satpy Rayleigh correction (experimental)")
+    p.add_argument("--rayleigh", action=argparse.BooleanOptionalAction, default=True,
+                   help="apply Satpy Rayleigh correction (default on; --no-rayleigh for the plain JMA recipe)")
     p.add_argument("--outdir", default="output", help="directory for the PNG")
     p.add_argument("--workdir", default=None, help="scratch directory for HSD files (deleted afterwards)")
     p.add_argument("--lookback-hours", type=float, default=3.0, help="how far back to look for the newest scan")

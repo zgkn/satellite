@@ -39,7 +39,7 @@ to redeploy). Note that Pages sites are public, and on a private repository Page
 | `gamma` | `1.7` | Gamma. Try `2.0` for hazy scenes. |
 | `segments` | `5-6` | Full-disk segments to download (1 = north … 10 = south). 5-6 cover roughly 10°N-10°S. |
 | `resolution` | `0.01` | Output pixel size in degrees (0.01° ≈ 1 km, giving about 2500 × 1400 px for the default bbox). |
-| `rayleigh` | off | Apply Satpy's Rayleigh correction (**experimental**, slower, downloads LUTs on first use; it also applies the sun-zenith correction the modifier requires). Off by default, as in the JMA guide. |
+| `rayleigh` | **on** | Apply Satpy's Rayleigh correction, which removes the blue atmospheric haze. It also applies the sun-zenith correction the modifier requires. Untick it for the plain JMA recipe (no Rayleigh, as in the quick guide), which is a bit faster. The first run downloads look-up tables; later runs reuse the cache. |
 
 Scan times are always UTC. Himawari data appear in the bucket roughly 20-30 min after the scan.
 
@@ -60,8 +60,8 @@ Downloaded HSD files are deleted after processing.
 
 - Aceh and the west coast of Sumatra are viewed at a much steeper angle than Borneo (they are ~45° of longitude
   from the sub-satellite point at 140.7°E), so detail there is a little coarser. This is geometry, not a bug.
-- With no Rayleigh correction the image has a slight bluish/grey veil, especially toward the edges and over haze;
-  that matches the JMA guide. Try `rayleigh` or `gamma: 2.0` if you want more contrast.
+- Rayleigh correction is on by default. With it off (the plain JMA recipe) the image has a bluish/grey veil,
+  especially toward the edges and over haze. `gamma: 2.0` can help with smoke haze either way.
 - Output is nearest-neighbour resampled to a lat/lon grid; no coastlines are drawn.
 
 ### Run locally

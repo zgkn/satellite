@@ -30,9 +30,9 @@ on:
         default: "0.01"
         type: string
       rayleigh:
-        description: "Apply Rayleigh correction (experimental, slower; also applies sun-zenith correction)"
+        description: "Apply Rayleigh correction (on by default; untick for the plain JMA recipe, a bit faster)"
         required: false
-        default: false
+        default: true
         type: boolean
 
 # One run at a time, so the output branch is never updated concurrently.
@@ -95,7 +95,7 @@ jobs:
             --workdir "$RUNNER_TEMP"
             --json-out output/result.json
           )
-          [ "$IN_RAYLEIGH" = "true" ] && args+=(--rayleigh)
+          if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
           python scripts/himawari_truecolor.py "${args[@]}"
 
       - name: Read result

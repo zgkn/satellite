@@ -1,0 +1,185 @@
+name: Himawari True Color
+
+# Manual only (also runnable from the GitHub mobile app). No schedule on purpose.
+on:
+  workflow_dispatch:
+    inputs:
+      datetime_utc:
+        description: "Scan time in UTC as YYYYMMDDHHMM (minute ends in 0). Blank = newest complete scan. 08:00 SGT = 0000 UTC"
+        required: false
+        default: ""
+        type: string
+      bbox:
+        description: "Region west,south,east,north in degrees (default: Sumatra, Malay Peninsula, Singapore, Borneo)"
+        required: false
+        default: "94.5,-6.5,119.5,7.5"
+        type: string
+      gamma:
+        description: "Gamma (1.7 default; try 2.0 for hazy scenes)"
+        required: false
+        default: "1.7"
+        type: string
+      segments:
+        description: "Full-disk segments to download, 1 = north ... 10 = south (5-6 covers about 10N to 10S)"
+        required: false
+        default: "5-6"
+        type: string
+      resolution:
+        description: "Output pixel size in degrees (0.01 is about 1 km)"
+        required: false
+        default: "0.01"
+        type: string
+      rayleigh:
+        description: "Apply Rayleigh correction (experimental, slower; also applies sun-zenith correction)"
+        required: false
+        default: false
+        type: boolean
+
+# One run at a time, so the output branch is never updated concurrently.
+concurrency:
+  group: himawari-output
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  truecolor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OUTPUT_BRANCH: himawari-output
+      KEEP_IMAGES: "48"
+      PSP_DATA_ROOT: ${{ github.workspace }}/.pyspectral-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Make sure bzip2 is available
+        run: |
+          command -v bzip2 >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq bzip2; }
+          bzip2 --help 2>&1 | head -n 1 || true
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Cache pyspectral data (Rayleigh LUTs)
+        if: ${{ inputs.rayleigh }}
+        uses: actions/cache@v4
+        with:
+          path: .pyspectral-data
+          key: pyspectral-${{ runner.os }}-v1
+
+      - name: Build True Color image
+        id: build
+        env:
+          IN_DATETIME: ${{ inputs.datetime_utc }}
+          IN_BBOX: ${{ inputs.bbox }}
+          IN_GAMMA: ${{ inputs.gamma }}
+          IN_SEGMENTS: ${{ inputs.segments }}
+          IN_RESOLUTION: ${{ inputs.resolution }}
+          IN_RAYLEIGH: ${{ inputs.rayleigh }}
+        run: |
+          args=(
+            --datetime-utc "$IN_DATETIME"
+            --bbox "$IN_BBOX"
+            --gamma "$IN_GAMMA"
+            --segments "$IN_SEGMENTS"
+            --resolution "$IN_RESOLUTION"
+            --outdir output
+            --workdir "$RUNNER_TEMP"
+            --json-out output/result.json
+          )
+          [ "$IN_RAYLEIGH" = "true" ] && args+=(--rayleigh)
+          python scripts/himawari_truecolor.py "${args[@]}"
+
+      - name: Read result
+        id: result
+        if: ${{ always() }}
+        run: |
+          if [ -f output/result.json ]; then
+            echo "status=$(jq -r .status output/result.json)" >> "$GITHUB_OUTPUT"
+            echo "png=$(jq -r '.png // empty' output/result.json)" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=error" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload PNG artifact
+        if: ${{ steps.result.outputs.status == 'ok' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: himawari-truecolor-${{ github.run_id }}
+          path: ${{ steps.result.outputs.png }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish to output branch
+        if: ${{ steps.result.outputs.status == 'ok' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PNG: ${{ steps.result.outputs.png }}
+        run: |
+          set -euo pipefail
+          name=$(basename "$PNG")
+          pub="$RUNNER_TEMP/publish"
+          rm -rf "$pub"; mkdir -p "$pub"
+
+          # Carry over the images already on the branch (if it exists yet).
+          if git ls-remote --exit-code --heads origin "$OUTPUT_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$OUTPUT_BRANCH"
+            git archive FETCH_HEAD | tar -x -C "$pub"
+          fi
+
+          cp "$PNG" "$pub/$name"
+          cp "$PNG" "$pub/latest.png"
+          # Keep only the newest N timestamped images (names sort chronologically).
+          ls -1 "$pub" | grep -E '^[0-9]{8}_[0-9]{4}\.png$' | sort | head -n "-$KEEP_IMAGES" \
+            | while read -r old; do rm -f "$pub/$old"; done
+
+          # Orphan branch holding a single fresh commit: history never grows, so the
+          # repo stays small even though every commit adds a ~5 MB PNG.
+          cd "$pub"
+          git init -q -b "$OUTPUT_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Himawari True Color $(jq -r .scan_utc_iso "$GITHUB_WORKSPACE/output/result.json")"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$OUTPUT_BRANCH"
+          echo "Pushed $(ls -1 | grep -c '\.png$') PNGs to $OUTPUT_BRANCH"
+
+      - name: Job summary
+        if: ${{ always() }}
+        env:
+          STATUS: ${{ steps.result.outputs.status }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          r=output/result.json
+          {
+            echo "## Himawari-9 True Color"
+            case "$STATUS" in
+              ok)
+                name=$(basename "$(jq -r .png $r)")
+                echo "**Scan:** $(jq -r .scan_utc_iso $r) / $(jq -r .scan_sgt_iso $r)  "
+                echo "**Image:** \`$OUTPUT_BRANCH:$name\` ($(jq -r '.size_px | "\(.[0])x\(.[1])"' $r) px)  "
+                echo "**Sun zenith at bbox centre:** $(jq -r .sun_zenith_centre $r)°  "
+                echo "**Segments:** $(jq -r '.segments | map(tostring) | join(",")' $r), bands B01/B02/B03 (all files present)"
+                echo
+                echo "- [This image]($SERVER/$REPO/blob/$OUTPUT_BRANCH/$name)"
+                echo "- [latest.png]($SERVER/$REPO/blob/$OUTPUT_BRANCH/latest.png)"
+                echo "- Also attached to this run as an artifact."
+                ;;
+              skipped_night)
+                echo "**Skipped (night):** scan $(jq -r .scan_utc_iso $r) / $(jq -r .scan_sgt_iso $r)," \
+                     "sun zenith $(jq -r .sun_zenith_centre $r)° at the bbox centre. True Color is daytime only; no image made."
+                ;;
+              *)
+                echo "**Failed.** $(jq -r '.message // "see the log"' $r 2>/dev/null || echo "see the log")"
+                ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"

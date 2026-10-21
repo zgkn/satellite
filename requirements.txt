@@ -1,0 +1,6 @@
+satpy
+pyresample
+pyspectral
+numpy
+pillow
+boto3

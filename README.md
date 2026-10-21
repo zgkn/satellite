@@ -1,6 +1,6 @@
 # satellite
 
-## Himawari-9 RGB: True Color, Natural Fire Color and Day Fire (Sumatra, Malay Peninsula, Singapore, Borneo)
+## Himawari-9 RGB: True Color and Day Fire (Sumatra, Malay Peninsula, Singapore, Borneo)
 
 A GitHub Actions workflow builds RGB images from Himawari-9 AHI full-disk data in the public NOAA NODD bucket
 (`s3://noaa-himawari9/AHI-L1b-FLDK/`, anonymous access, no AWS account needed). Each channel is scaled between a
@@ -11,13 +11,12 @@ corrections). Daytime only.
 | Product | R | G | B | Gamma (R/G/B) | Recipe | Use |
 |---|---|---|---|---|---|---|
 | `true_color` | B03 0.64 µm | B02 0.51 µm | B01 0.47 µm | 1.7 | JMA | Natural-looking picture |
-| `natural_fire_color` | B06 2.3 µm | B04 0.86 µm | B03 0.64 µm | 1.0 | JMA | Fire hotspots, burn scars, smoke, vegetation |
 | `day_fire` | B07 3.9 µm (27-60 °C) | B04 0.86 µm | B03 0.64 µm | 0.4 / 1 / 1 | NOAA/CIRA (VIIRS Day Fire RGB, on AHI bands; red minimum raised from 0 to 27 °C for the tropics; cold cloud shown grey) | Thermal hotspots |
 
 ### How to run it
 
 **GitHub web / mobile app:** open the repo → **Actions** → **Himawari RGB** → **Run workflow**. Every input has a
-default, so you can just tap *Run workflow*. It takes about 4-5 minutes for all three products.
+default, so you can just tap *Run workflow*. It takes about 3-4 minutes for both products.
 
 **Where the results go**
 
@@ -26,15 +25,14 @@ default, so you can just tap *Run workflow*. It takes about 4-5 minutes for all 
   never accumulates history:
   - True Color: `YYYYMMDD_HHMM.png` and `latest.png` at the top level, e.g.
     `https://github.com/<owner>/satellite/blob/himawari-output/latest.png` (works in the mobile app).
-  - Natural Fire Color: the same names inside `naturalfire/`, e.g. `.../blob/himawari-output/naturalfire/latest.png`.
-  - Day Fire: the same names inside `dayfire/`.
+  - Day Fire: the same names inside `dayfire/`, e.g. `.../blob/himawari-output/dayfire/latest.png`.
 - The job summary shows the scan time, the image paths and links.
 
 ### Website (GitHub Pages)
 
 Each run also regenerates `index.html` on the `himawari-output` branch via `scripts/build_site.py`: one section per
 product with the latest image, download link and thumbnails of recent scans (works on phones), plus the colour key for
-Fire Color. To serve it, enable Pages once:
+Day Fire. To serve it, enable Pages once:
 **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `himawari-output`, folder `/ (root)` → Save.**
 The site is then at `https://<owner>.github.io/satellite/` and updates after every run (allow a minute or two for Pages
 to redeploy). Note that Pages sites are public, and on a private repository Pages needs a paid GitHub plan.
@@ -44,40 +42,20 @@ to redeploy). Note that Pages sites are public, and on a private repository Page
 | Input | Default | Meaning |
 |---|---|---|
 | `datetime_utc` | blank | Scan time **in UTC**, `YYYYMMDDHHMM`, minute ending in 0 (scans are every 10 min). Blank = newest complete scan from the last ~3 h. Examples: 08:00 SGT = `0000` UTC, 10:00 SGT = `0200` UTC, so `202610210200`. |
-| `product` | `all` | `true_color`, `natural_fire_color`, `day_fire` or `all`. With more than one, shared files (B03, B04) and the winds are fetched once. |
-| `bbox` | `94.5,-6.5,119.5,7.5` | `west,south,east,north` in degrees. Default covers Sumatra, Peninsular Malaysia, Singapore and Borneo. A smaller box gives a smaller image at the same pixel size; add a finer `resolution` (e.g. `0.005`) to enlarge a fire area. B06 itself only has 2 km pixels. |
-| `gamma` | blank | Override for `true_color` and `natural_fire_color`. Blank = each product's default (1.7 and 1.0, as in the JMA guides). Try `2.0` for hazy true color. `day_fire` ignores it (its recipe has different gammas per channel). |
+| `product` | `all` | `true_color`, `day_fire` or `all`. With both, the shared file (B03) and the winds are fetched once. |
+| `bbox` | `94.5,-6.5,119.5,7.5` | `west,south,east,north` in degrees. Default covers Sumatra, Peninsular Malaysia, Singapore and Borneo. A smaller box gives a smaller image at the same pixel size; add a finer `resolution` (e.g. `0.005`) to enlarge a fire area. B07 itself only has 2 km pixels. |
+| `gamma` | blank | True Color gamma override. Blank = 1.7, as in the JMA guide. Try `2.0` for hazy scenes. `day_fire` ignores it (its recipe has different gammas per channel). |
 | `segments` | `5-6` | Full-disk segments to download (1 = north … 10 = south). 5-6 cover roughly 10°N-10°S. |
 | `resolution` | `0.01` | Output pixel size in degrees (0.01° ≈ 1 km, giving about 2500 × 1400 px for the default bbox). |
 | `winds` | **on** | Overlay thin orange streamlines of ECMWF IFS 925 hPa wind (see below). If the ECMWF data cannot be fetched the run still publishes the images, without winds, and prints a warning. Locally: `--no-winds`, `--wind-level` (hPa), `--wind-spacing` (px). |
-| `coastlines` | **on** | Draw coastlines from Natural Earth 1:10m (public domain, stored in `data/ne_10m_coastline.zip`) at 1.5 px width: green on True Color, magenta on the two fire products (green would be confused with the vegetation colour). Untick for clean images. Locally: `--no-coastlines`, `--coast-width`. |
+| `coastlines` | **on** | Draw coastlines from Natural Earth 1:10m (public domain, stored in `data/ne_10m_coastline.zip`) at 1.5 px width: green on True Color, magenta on Day Fire (green would be confused with the vegetation colour). Untick for clean images. Locally: `--no-coastlines`, `--coast-width`. |
 | `cloud_cue` | **on** | **Day Fire only.** Show cold cloud (10.4 µm below ~290 K) in grey so it stands apart from smoke (see Day Fire). Locally: `--no-cloud-cue`, `--cloud-bt`. |
-| `rayleigh` | **on** | **True Color only.** Apply Satpy's Rayleigh correction, which removes the blue atmospheric haze. It also applies the sun-zenith correction the modifier requires. Untick it for the plain JMA recipe, which is a bit faster. The first run downloads look-up tables; later runs reuse the cache. Fire Color never uses it (the JMA guide specifies none). |
+| `rayleigh` | **on** | **True Color only.** Apply Satpy's Rayleigh correction, which removes the blue atmospheric haze. It also applies the sun-zenith correction the modifier requires. Untick it for the plain JMA recipe, which is a bit faster. The first run downloads look-up tables; later runs reuse the cache. Day Fire never uses it. |
 
 Scan times are always UTC. Himawari data appear in the bucket roughly 20-30 min after the scan. The **0240 and 1440
 UTC** full-disk scans are missing from the bucket every day (10:40 and 22:40 SGT; presumably satellite housekeeping),
 so asking for those exact times fails with a "no files found" message; use the scan before or after. A blank
 `datetime_utc` handles this automatically by walking back to the newest complete scan.
-
-### Natural Fire Color
-
-Recipe from the JMA MSC *Himawari Natural Fire Color RGB Quick Guide*: the same as Natural Color but with the 2.3 µm
-band (B06) in red instead of 1.6 µm (B05). Min 0 %, max 100 %, gamma 1.0 for all three channels.
-
-| Colour | Meaning |
-|---|---|
-| Red | Fire hotspots |
-| Dark green | Healthy vegetation |
-| Brown | Burn scars |
-| Dark teal | Smoke |
-| Cyan | Clouds |
-| Black | Sea |
-
-Limits (from the guide): daytime only; water and ice clouds are not distinguished (both cyan); cloud colour resembles
-snow/ice. B06 has 2 km pixels, so a hotspot is a block of about 2 output pixels: it is a small red dot on a phone
-screen. Open the full-size image, or use a smaller `bbox`. The reflectance is Satpy's plain albedo (radiance × the
-file's albedo coefficient, no division by the cosine of the sun angle), which is what the guide uses, so the image
-gets darker as the sun gets lower (late afternoon, the east/west edges).
 
 ### Day Fire
 
@@ -117,6 +95,11 @@ band (B13, 2 km).
   pixels, so only larger fires show. Himawari does cover the area every 10 minutes.
 - **Limits (from the guide):** thick cloud hides fires; warm ground can look red like a small fire. At 3.9 µm the
   daytime signal also includes reflected sunlight, so sunlit, warm land can be redder than in the guide's examples.
+- **Small dots:** a hotspot is a block of about 2 output pixels, a small red dot on a phone screen. Open the
+  full-size image, or use a smaller `bbox`.
+- **Reflectance:** the 0.86 and 0.64 µm channels are Satpy's plain albedo (radiance × the file's albedo coefficient,
+  no division by the cosine of the sun angle), so the image gets darker as the sun gets lower (late afternoon, the
+  east/west edges).
 - Brightness temperature is Satpy's calibration of B07. Each run logs each channel's 1st/50th/99th percentile so the
   scaling can be checked.
 
@@ -139,8 +122,8 @@ u, v and surface-pressure messages are fetched with byte-range requests, ~2 MB p
 ### What it checks
 
 1. Lists the bucket first and fails with a clear message naming any missing band/segment (the bands of the chosen
-   products × the requested segments: 6 files for one product, 14 for all three including the cloud-cue band). With a blank time it walks back from now
-   and picks the newest scan in which all of those files exist.
+   products × the requested segments: 6 files for True Color, 8 for Day Fire including the cloud-cue band, 12 for
+   both). With a blank time it walks back from now and picks the newest scan in which all of those files exist.
 2. Checks that the bbox lies inside the requested segments and, if not, fails telling you which segments are needed
    (e.g. a bbox reaching 15°N needs `4-6`) instead of producing a cropped or blank image.
 3. Night check: if the sun is below the horizon at the bbox centre (`pyorbital` solar zenith ≥ 90°), the run is
@@ -164,7 +147,7 @@ Downloaded HSD files are deleted after processing.
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt          # needs the `bzip2` command (Satpy uses it to read .bz2 files)
 python scripts/himawari_truecolor.py --datetime-utc 202610210200 --outdir output
-python scripts/himawari_truecolor.py --product natural_fire_color --no-winds --help
+python scripts/himawari_truecolor.py --product day_fire --no-winds --help
 ```
 
 Exit status: `0` success or deliberate night skip (see `status` in `--json-out`), `2` expected failure (missing data,

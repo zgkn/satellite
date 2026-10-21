@@ -2,10 +2,9 @@
 """Generate a small static site (index.html + thumbnails) from directories of Himawari PNGs.
 
 Each product has a directory holding ``YYYYMMDD_HHMM.png`` files (UTC scan times) plus
-``latest.png``: True Color in the root, Natural Fire Color in ``naturalfire/``, Day Fire in
-``dayfire/``.  Used by
-the Himawari workflow on the ``himawari-output`` branch, which is served by GitHub Pages,
-but it works on any such directory:
+``latest.png``: True Color in the root, Day Fire in ``dayfire/``.  Used by the Himawari
+workflow on the ``himawari-output`` branch, which is served by GitHub Pages, but it works
+on any such directory:
 
     python scripts/build_site.py path/to/dir
 """
@@ -22,16 +21,6 @@ from PIL import Image
 NAME_RE = re.compile(r"^(\d{8})_(\d{4})\.png$")
 SGT = dt.timezone(dt.timedelta(hours=8))
 THUMB_WIDTH = 480
-
-# JMA Natural Fire Color RGB Quick Guide, "Color interpretation" table.
-FIRE_KEY = (
-    ("#ff0000", "Fire hotspots"),
-    ("#17512d", "Healthy vegetation"),
-    ("#5e3b22", "Burn scars"),
-    ("#0f5d73", "Smoke"),
-    ("#4cf5f5", "Clouds"),
-    ("#000000", "Sea surface"),
-)
 
 # NOAA/CIRA VIIRS Day Fire RGB Quick Guide, "RGB Interpretation" table.
 DAY_FIRE_KEY = (
@@ -50,14 +39,6 @@ SECTIONS = (
         key="truecolor", title="True Color", subdir="",
         blurb="JMA True Color RGB (R&nbsp;B03, G&nbsp;B02, B&nbsp;B01), Rayleigh-corrected, gamma 1.7.",
         key_items=None, note=None,
-    ),
-    dict(
-        key="naturalfire", title="Natural Fire Color", subdir="naturalfire",
-        blurb="JMA Natural Fire Color RGB (R&nbsp;B06 2.3&nbsp;&micro;m, G&nbsp;B04 0.86&nbsp;&micro;m, "
-              "B&nbsp;B03 0.64&nbsp;&micro;m), gamma 1.0. Highlights fire hotspots, burn scars and smoke.",
-        key_items=FIRE_KEY,
-        note="Water and ice clouds are not distinguished (both cyan), and cloud colour resembles snow/ice. "
-             "Hotspots are single 2&nbsp;km pixels, so they are small dots at this scale: open the full-size image.",
     ),
     dict(
         key="dayfire", title="Day Fire", subdir="dayfire",
@@ -105,7 +86,7 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Himawari-9 RGB</title>
-<meta name="description" content="Latest Himawari-9 True Color, Natural Fire Color and Day Fire RGB of Sumatra, the Malay Peninsula, Singapore and Borneo.">
+<meta name="description" content="Latest Himawari-9 True Color and Day Fire RGB of Sumatra, the Malay Peninsula, Singapore and Borneo.">
 <style>
 :root {{ --bg:#f6f7f9; --fg:#14181f; --muted:#5b6573; --card:#fff; --line:#dfe3e8; --accent:#0b63ce; }}
 @media (prefers-color-scheme: dark) {{
@@ -143,11 +124,11 @@ footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 <body>
 <main>
 <h1>Himawari-9 RGB</h1>
-<p class="sub">Sumatra, Malay Peninsula, Singapore and Borneo &middot; JMA RGB recipes &middot; daytime scans only</p>
+<p class="sub">Sumatra, Malay Peninsula, Singapore and Borneo &middot; JMA and NOAA/CIRA RGB recipes &middot; daytime scans only</p>
 {nav}
 {body}
 <footer>
-  Data: Himawari-9 AHI, JMA / NOAA NODD (<code>s3://noaa-himawari9</code>); recipes: JMA MSC Himawari RGB Quick Guides,
+  Data: Himawari-9 AHI, JMA / NOAA NODD (<code>s3://noaa-himawari9</code>); recipes: JMA MSC Himawari True Color RGB Quick Guide,
   NOAA/CIRA VIIRS Day Fire RGB Quick Guide;
   coastlines: Natural Earth; wind streamlines: ECMWF open data (CC-BY-4.0).
   Scan times are UTC; SGT = UTC+8. Page updated {built} UTC.

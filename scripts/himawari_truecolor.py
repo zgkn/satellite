@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Build Himawari-9 RGB images (JMA recipes) for a lat/lon bbox.
+"""Build Himawari-9 RGB images (JMA / NOAA-CIRA recipes) for a lat/lon bbox.
 
 Data come from the public NOAA NODD bucket (anonymous access):
     s3://noaa-himawari9/AHI-L1b-FLDK/YYYY/MM/DD/HHMM/
 
-Products (JMA Himawari RGB Quick Guides; each band: reflectance 0-100 %, clip, /100, ** (1/gamma)):
-    true_color          R = B03 (0.64 um), G = B02 (0.51 um), B = B01 (0.47 um), gamma 1.7
-    natural_fire_color  R = B06 (2.3 um),  G = B04 (0.86 um), B = B03 (0.64 um), gamma 1.0
-                        (fire hotspots red, vegetation green, burn scars brown, smoke teal, clouds cyan)
+Products (each channel: scaled min..max, clip, ** (1/gamma)):
+    true_color          JMA True Color RGB Quick Guide: R = B03 (0.64 um), G = B02 (0.51 um),
+                        B = B01 (0.47 um), reflectance 0-100 %, gamma 1.7
     day_fire            R = B07 (3.9 um brightness temperature, 27..60 C, gamma 0.4), G = B04, B = B03
                         (NOAA/CIRA VIIRS Day Fire RGB recipe on AHI bands: fire red, burn scar reddish
                         brown, smoke blue, clouds cyan, vegetation green; B07 is 2 km, VIIRS I4 375 m;
@@ -17,7 +16,7 @@ Products (JMA Himawari RGB Quick Guides; each band: reflectance 0-100 %, clip, /
 The Satpy built-in composites are deliberately NOT used, because they apply extra
 corrections.  The bands are loaded, resampled and stacked by hand.  The reflectance is
 Satpy's plain albedo (radiance x the file's albedo coefficient, no sun-angle division),
-as in the JMA guides.
+as in the JMA guide.
 
 Exit status: 0 on success or on a deliberate night-time skip (see the ``status``
 field of the --json-out file), 2 for expected failures (missing data, bbox outside
@@ -47,17 +46,13 @@ SATELLITE = "H09"
 # uniform_gamma = whether --gamma may override it (False when the recipe has different gammas per channel).
 # rayleigh = whether the --rayleigh option applies; subdir = folder below --outdir ("" keeps the original
 # True Color file names/links unchanged); coast_rgba = coastline colour, chosen to be absent from the
-# product's own colour key (green would clash with the vegetation in the fire products).
+# product's own colour key (green would clash with the vegetation in Day Fire).
 _REFL, _BT = "reflectance", "brightness_temperature"
 PRODUCTS = {
     "true_color": dict(
         label="True Color RGB", recipe="JMA recipe", uniform_gamma=True, rayleigh=True,
         channels=(("B03", _REFL, 0, 100, 1.7), ("B02", _REFL, 0, 100, 1.7), ("B01", _REFL, 0, 100, 1.7)),
         subdir="", coast_rgba=(40, 255, 70, 255)),
-    "natural_fire_color": dict(
-        label="Natural Fire Color RGB", recipe="JMA recipe", uniform_gamma=True, rayleigh=False,
-        channels=(("B06", _REFL, 0, 100, 1.0), ("B04", _REFL, 0, 100, 1.0), ("B03", _REFL, 0, 100, 1.0)),
-        subdir="naturalfire", coast_rgba=(255, 60, 255, 255)),
     # NOAA/CIRA "VIIRS Day Fire RGB" quick guide, with AHI band 7 (3.9 um, 2 km) for VIIRS 3.7 um (375 m).
     # The guide scales the red channel 0..60 C; here the minimum is raised to 27 C (300.15 K) because tropical
     # sea and land sit at ~27 C and above at 3.9 um, which turned all water dark red (tested on a real scan:
@@ -493,16 +488,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--product", choices=(*PRODUCTS, "all"), default="all",
                    help="which image(s) to build (default: all)")
     p.add_argument("--gamma", type=float, default=None,
-                   help="gamma override for true_color and natural_fire_color (day_fire has per-channel "
-                        "gammas 0.4/1/1 and ignores it); default per product "
-                        "(1.7 true_color - 2.0 can help with haze; 1.0 natural_fire_color)")
+                   help="gamma override for true_color (day_fire has per-channel gammas 0.4/1/1 and ignores "
+                        "it); default 1.7 - 2.0 can help with haze")
     p.add_argument("--segments", default="5-6", help="full-disk segments to download, e.g. 5-6")
     p.add_argument("--resolution", type=float, default=0.01, help="output pixel size in degrees (0.01 ~ 1 km)")
     p.add_argument("--rayleigh", action=argparse.BooleanOptionalAction, default=True,
                    help="apply Satpy Rayleigh correction to true_color (default on; --no-rayleigh for the plain "
-                        "JMA recipe); natural_fire_color never uses it, as in the JMA guide")
+                        "JMA recipe); day_fire never uses it")
     p.add_argument("--coastlines", action=argparse.BooleanOptionalAction, default=True,
-                   help="draw Natural Earth 1:10m coastlines (default on; green, magenta on natural_fire_color)")
+                   help="draw Natural Earth 1:10m coastlines (default on; green, magenta on day_fire)")
     p.add_argument("--coast-width", type=float, default=1.5, help="coastline width in output pixels")
     p.add_argument("--cloud-cue", action=argparse.BooleanOptionalAction, default=True,
                    help="day_fire only: show cold cloud (10.4 um brightness temperature below ~290 K) in grey so it "
@@ -514,7 +508,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa for the streamlines")
     p.add_argument("--wind-spacing", type=float, default=45.0, help="approximate streamline spacing in output pixels")
     p.add_argument("--outdir", default="output",
-                   help="directory for the PNGs (natural_fire_color goes in its 'naturalfire' subfolder)")
+                   help="directory for the PNGs (day_fire goes in its 'dayfire' subfolder)")
     p.add_argument("--workdir", default=None, help="scratch directory for HSD files (deleted afterwards)")
     p.add_argument("--lookback-hours", type=float, default=3.0, help="how far back to look for the newest scan")
     p.add_argument("--check-only", action="store_true", help="only list the bucket and run the checks")

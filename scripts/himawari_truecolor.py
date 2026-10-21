@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Build a Himawari-9 True Color RGB image (JMA recipe) for a lat/lon bbox.
+"""Build Himawari-9 RGB images (JMA recipes) for a lat/lon bbox.
 
 Data come from the public NOAA NODD bucket (anonymous access):
     s3://noaa-himawari9/AHI-L1b-FLDK/YYYY/MM/DD/HHMM/
 
-Recipe (JMA True Color RGB Quick Guide):
-    R = B03 (0.64 um), G = B02 (0.51 um), B = B01 (0.47 um)
-    each band: reflectance 0-100 %, clip, /100, ** (1/gamma)
+Products (JMA Himawari RGB Quick Guides; each band: reflectance 0-100 %, clip, /100, ** (1/gamma)):
+    true_color          R = B03 (0.64 um), G = B02 (0.51 um), B = B01 (0.47 um), gamma 1.7
+    natural_fire_color  R = B06 (2.3 um),  G = B04 (0.86 um), B = B03 (0.64 um), gamma 1.0
+                        (fire hotspots red, vegetation green, burn scars brown, smoke teal, clouds cyan)
 
-The Satpy built-in ``true_color`` composite is deliberately NOT used, because it
-applies extra corrections.  The bands are loaded, resampled and stacked by hand.
+The Satpy built-in composites are deliberately NOT used, because they apply extra
+corrections.  The bands are loaded, resampled and stacked by hand.  The reflectance is
+Satpy's plain albedo (radiance x the file's albedo coefficient, no sun-angle division),
+as in the JMA guides.
 
 Exit status: 0 on success or on a deliberate night-time skip (see the ``status``
 field of the --json-out file), 2 for expected failures (missing data, bbox outside
@@ -34,7 +37,15 @@ import ecmwf_winds  # noqa: E402
 BUCKET = "noaa-himawari9"
 PRODUCT = "AHI-L1b-FLDK"
 SATELLITE = "H09"
-BANDS = ("B01", "B02", "B03")
+# bands = (R, G, B); rayleigh = whether the --rayleigh option applies; subdir = folder below --outdir
+# ("" keeps the original True Color file names/links unchanged); coast_rgba = coastline colour,
+# chosen to be absent from the product's own colour key (green would clash with Fire Color vegetation).
+PRODUCTS = {
+    "true_color": dict(label="True Color RGB", bands=("B03", "B02", "B01"), gamma=1.7, rayleigh=True,
+                       subdir="", coast_rgba=(40, 255, 70, 255)),
+    "natural_fire_color": dict(label="Natural Fire Color RGB", bands=("B06", "B04", "B03"), gamma=1.0,
+                               rayleigh=False, subdir="naturalfire", coast_rgba=(255, 60, 255, 255)),
+}
 N_SEGMENTS = 10  # full disk is split into 10 equal N-S segments, 01 = north
 # Full-disk extent in geostationary projection y (metres, +north).  Verified
 # against the area extents Satpy reports for real data (see check_loaded_coverage).
@@ -42,7 +53,6 @@ FD_HALF_HEIGHT_M = 5.5e6
 GEOS_CRS = dict(proj="geos", h=35785863, lon_0=140.7, sweep="y", a=6378137, b=6356752.3)
 
 COASTLINE_ZIP = Path(__file__).resolve().parent.parent / "data" / "ne_10m_coastline.zip"
-COAST_RGBA = (40, 255, 70, 255)  # green
 
 SGT = dt.timezone(dt.timedelta(hours=8))
 KEY_RE = re.compile(
@@ -120,15 +130,15 @@ def scan_prefix(t: dt.datetime) -> str:
     return f"{PRODUCT}/{t:%Y/%m/%d/%H%M}/"
 
 
-def list_scan(s3, t: dt.datetime) -> dict[tuple[str, int], str]:
-    """Return {(band, segment): key} for B01-B03 of scan ``t`` that exist in the bucket."""
+def list_scan(s3, t: dt.datetime, bands) -> dict[tuple[str, int], str]:
+    """Return {(band, segment): key} for ``bands`` of scan ``t`` that exist in the bucket."""
     found: dict[tuple[str, int], str] = {}
     prefix = scan_prefix(t)
     pages = s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET, Prefix=prefix)
     for page in pages:
         for obj in page.get("Contents", []):
             m = KEY_RE.search(obj["Key"])
-            if not m or f"B{m['band']}" not in BANDS or int(m["nseg"]) != N_SEGMENTS:
+            if not m or f"B{m['band']}" not in bands or int(m["nseg"]) != N_SEGMENTS:
                 continue
             if obj["Size"] == 0:
                 continue
@@ -136,28 +146,28 @@ def list_scan(s3, t: dt.datetime) -> dict[tuple[str, int], str]:
     return found
 
 
-def missing_files(found, segments) -> list[str]:
-    return [f"{b} S{seg:02d}" for b in BANDS for seg in segments if (b, seg) not in found]
+def missing_files(found, segments, bands) -> list[str]:
+    return [f"{b} S{seg:02d}" for b in bands for seg in segments if (b, seg) not in found]
 
 
 def only_segments(found, segments):
     return {k: v for k, v in found.items() if k[1] in segments}
 
 
-def select_scan(s3, segments, requested: dt.datetime | None, lookback_h: float):
+def select_scan(s3, segments, requested: dt.datetime | None, lookback_h: float, bands):
     """Pick the scan to process; returns (scan_time, {(band, seg): key})."""
     if requested is not None:
-        found = list_scan(s3, requested)
+        found = list_scan(s3, requested, bands)
         if not found:
             raise UserError(
-                f"No B01/B02/B03 files found in s3://{BUCKET}/{scan_prefix(requested)}\n"
+                f"No {'/'.join(bands)} files found in s3://{BUCKET}/{scan_prefix(requested)}\n"
                 "Check the date/time (UTC, YYYYMMDDHHMM): the scan may not exist yet "
                 "(data lags real time by ~20-30 min) or may be outside the archive."
                 + ("\nNote: the 0240 and 1440 UTC full-disk scans are absent from the bucket every day "
                    "(seen daily; presumably satellite housekeeping). Pick the scan before or after."
                    if f"{requested:%H%M}" in ("0240", "1440") else "")
             )
-        miss = missing_files(found, segments)
+        miss = missing_files(found, segments, bands)
         if miss:
             raise UserError(
                 f"Scan {requested:%Y-%m-%d %H%M} UTC is incomplete. Missing: {', '.join(miss)}\n"
@@ -171,9 +181,9 @@ def select_scan(s3, segments, requested: dt.datetime | None, lookback_h: float):
     newest_report = None
     n_checked = 0
     while t >= oldest:
-        found = list_scan(s3, t)
+        found = list_scan(s3, t, bands)
         n_checked += 1
-        miss = missing_files(found, segments)
+        miss = missing_files(found, segments, bands)
         if not miss:
             log(f"Newest complete scan: {t:%Y-%m-%d %H%M} UTC (checked {n_checked} scan(s))")
             return t, only_segments(found, segments)
@@ -181,9 +191,9 @@ def select_scan(s3, segments, requested: dt.datetime | None, lookback_h: float):
             newest_report = f"newest partial scan {t:%Y%m%d%H%M} is missing {', '.join(miss)}"
         t -= dt.timedelta(minutes=10)
     raise UserError(
-        f"No complete scan with {'/'.join(BANDS)} segments {segments} in the last "
+        f"No complete scan with {'/'.join(bands)} segments {segments} in the last "
         f"{lookback_h:g} h of s3://{BUCKET}/{PRODUCT}/ ({n_checked} scans checked"
-        + (f"; {newest_report}" if newest_report else "; none had any B01-B03 files")
+        + (f"; {newest_report}" if newest_report else f"; none had any {'/'.join(bands)} files")
         + ").\nThe archive may be lagging; retry in a few minutes or pass datetime_utc."
     )
 
@@ -274,8 +284,13 @@ def solar_zenith(t: dt.datetime, lon: float, lat: float) -> float:
 
 
 # ------------------------------------------------------------------- processing
-def make_rgb(files, bbox, resolution, gamma, rayleigh):
-    """Return a uint8 (H, W, 3) array for the bbox."""
+def band_of(path: Path) -> str | None:
+    m = KEY_RE.search(Path(path).name)
+    return f"B{m['band']}" if m else None
+
+
+def make_rgb(files, bbox, resolution, product, gamma, rayleigh):
+    """Return a uint8 (H, W, 3) array for ``product`` (a PRODUCTS entry) over the bbox."""
     import dask
     import numpy as np
     from pyresample.geometry import AreaDefinition
@@ -293,18 +308,19 @@ def make_rgb(files, bbox, resolution, gamma, rayleigh):
     )
     log(f"Target grid: {width} x {height} px at {resolution}\N{DEGREE SIGN}")
 
-    scn = Scene(filenames=[str(f) for f in files], reader="ahi_hsd")
+    bands = product["bands"]  # (R, G, B)
+    # Only this product's files, so each Scene decompresses just what it needs.
+    scn = Scene(filenames=[str(f) for f in files if band_of(f) in bands], reader="ahi_hsd")
     if rayleigh:
         # The Rayleigh modifier requires sun-zenith-corrected reflectance as input.
-        scn.load(list(BANDS), calibration="reflectance", modifiers=("sunz_corrected", "rayleigh_corrected"))
+        scn.load(list(bands), calibration="reflectance", modifiers=("sunz_corrected", "rayleigh_corrected"))
     else:
-        scn.load(list(BANDS), calibration="reflectance")
+        scn.load(list(bands), calibration="reflectance")
 
-    check_loaded_coverage(scn[BANDS[0]].attrs["area"], bbox)
+    check_loaded_coverage(scn[bands[0]].attrs["area"], bbox)
 
     resampled = scn.resample(area, resampler="nearest")
-    # R = B03, G = B02, B = B01
-    chans = [resampled[b].data for b in ("B03", "B02", "B01")]
+    chans = [resampled[b].data for b in bands]
     rgb = np.stack([np.asarray(dask.compute(c)[0], dtype="float32") for c in chans], axis=-1)
 
     bad = float(np.isnan(rgb).any(axis=-1).mean())
@@ -329,8 +345,8 @@ def _font(size: int):
         return ImageFont.load_default()
 
 
-def draw_coastline(img, bbox, resolution: float, width_px: float):
-    """Draw Natural Earth 1:10m coastlines in green onto ``img`` (an RGBA lat/lon-grid image)."""
+def draw_coastline(img, bbox, resolution: float, width_px: float, rgba):
+    """Draw Natural Earth 1:10m coastlines in colour ``rgba`` onto ``img`` (an RGBA lat/lon-grid image)."""
     import shapefile  # pyshp
     from PIL import Image, ImageDraw
 
@@ -354,12 +370,12 @@ def draw_coastline(img, bbox, resolution: float, width_px: float):
                     draw.line(xy, fill=255, width=lw, joint="curve")
                     n_parts += 1
     mask = mask.resize(img.size, Image.LANCZOS)
-    img.paste(Image.new("RGBA", img.size, COAST_RGBA), mask=mask)
+    img.paste(Image.new("RGBA", img.size, tuple(rgba)), mask=mask)
     log(f"Drew {n_parts} coastline segments (Natural Earth 1:10m)")
     return img
 
 
-def overlay_and_save(rgb, scan: dt.datetime, gamma: float, rayleigh: bool, out: Path,
+def overlay_and_save(rgb, scan: dt.datetime, product: dict, gamma: float, rayleigh: bool, out: Path,
                      bbox=None, resolution=None, coast_width: float = 0.0,
                      wind=None, wind_spacing: float = 45.0) -> None:
     from PIL import Image, ImageDraw
@@ -368,7 +384,7 @@ def overlay_and_save(rgb, scan: dt.datetime, gamma: float, rayleigh: bool, out: 
     if wind is not None:  # layer order: image, streamlines, coastlines, text
         img = ecmwf_winds.draw_streamlines(img, wind, bbox, resolution, wind_spacing)
     if coast_width > 0:
-        draw_coastline(img, bbox, resolution, coast_width)
+        draw_coastline(img, bbox, resolution, coast_width, product["coast_rgba"])
     h = rgb.shape[0]
     size = max(12, round(h / 48))
     big, small = _font(size), _font(round(size * 0.8))
@@ -377,7 +393,9 @@ def overlay_and_save(rgb, scan: dt.datetime, gamma: float, rayleigh: bool, out: 
     lines = [
         ("Himawari-9 AHI, JMA / NOAA NODD", big, white),
         (f"{scan:%Y-%m-%d %H:%M} UTC  /  {sgt:%Y-%m-%d %H:%M} SGT", big, white),
-        (f"True Color RGB (JMA recipe)  gamma {gamma:g}  Rayleigh {'on' if rayleigh else 'off'}", small, white),
+        (f"{product['label']} (JMA recipe)  gamma {gamma:g}"
+         + (f"  Rayleigh {'on' if rayleigh else 'off'}" if product["rayleigh"] else
+            f"  R {product['bands'][0]} G {product['bands'][1]} B {product['bands'][2]}"), small, white),
     ]
     if wind is not None:  # the line doubles as the legend: same colour as the streamlines
         lines.append((f"Streamlines: {wind.describe()}", small, (*ecmwf_winds.LINE_RGB, 255)))
@@ -402,23 +420,29 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--datetime-utc", default="", help="scan time YYYYMMDDHHMM (UTC); blank = newest complete scan")
     p.add_argument("--bbox", default="94.5,-6.5,119.5,7.5", help="west,south,east,north in degrees")
-    p.add_argument("--gamma", type=float, default=1.7, help="gamma (1.7 default; 2.0 can help with haze)")
+    p.add_argument("--product", choices=(*PRODUCTS, "both"), default="both",
+                   help="which image(s) to build (default: both)")
+    p.add_argument("--gamma", type=float, default=None,
+                   help="gamma override for every selected product; default per product "
+                        "(1.7 true_color - 2.0 can help with haze; 1.0 natural_fire_color)")
     p.add_argument("--segments", default="5-6", help="full-disk segments to download, e.g. 5-6")
     p.add_argument("--resolution", type=float, default=0.01, help="output pixel size in degrees (0.01 ~ 1 km)")
     p.add_argument("--rayleigh", action=argparse.BooleanOptionalAction, default=True,
-                   help="apply Satpy Rayleigh correction (default on; --no-rayleigh for the plain JMA recipe)")
+                   help="apply Satpy Rayleigh correction to true_color (default on; --no-rayleigh for the plain "
+                        "JMA recipe); natural_fire_color never uses it, as in the JMA guide")
     p.add_argument("--coastlines", action=argparse.BooleanOptionalAction, default=True,
-                   help="draw green Natural Earth 1:10m coastlines (default on)")
+                   help="draw Natural Earth 1:10m coastlines (default on; green, magenta on natural_fire_color)")
     p.add_argument("--coast-width", type=float, default=1.5, help="coastline width in output pixels")
     p.add_argument("--winds", action=argparse.BooleanOptionalAction, default=True,
                    help="overlay ECMWF IFS wind streamlines (default on; skipped with a warning if ECMWF data fail)")
     p.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa for the streamlines")
     p.add_argument("--wind-spacing", type=float, default=45.0, help="approximate streamline spacing in output pixels")
-    p.add_argument("--outdir", default="output", help="directory for the PNG")
+    p.add_argument("--outdir", default="output",
+                   help="directory for the PNGs (natural_fire_color goes in its 'naturalfire' subfolder)")
     p.add_argument("--workdir", default=None, help="scratch directory for HSD files (deleted afterwards)")
     p.add_argument("--lookback-hours", type=float, default=3.0, help="how far back to look for the newest scan")
     p.add_argument("--check-only", action="store_true", help="only list the bucket and run the checks")
-    p.add_argument("--json-out", default=None, help="write a JSON result file (status, scan time, png path)")
+    p.add_argument("--json-out", default=None, help="write a JSON result file (status, scan time, outputs)")
     return p
 
 
@@ -427,8 +451,10 @@ def run(args) -> dict:
     segments = parse_segments(args.segments)
     if not 0.001 <= args.resolution <= 1:
         raise UserError(f"resolution must be between 0.001 and 1 degrees, got {args.resolution}")
-    if not 0.2 <= args.gamma <= 5:
+    if args.gamma is not None and not 0.2 <= args.gamma <= 5:
         raise UserError(f"gamma must be between 0.2 and 5, got {args.gamma}")
+    products = list(PRODUCTS) if args.product == "both" else [args.product]
+    bands = sorted({b for p in products for b in PRODUCTS[p]["bands"]})
     if args.winds and args.wind_level not in ecmwf_winds.PRESSURE_LEVELS:
         raise UserError(f"wind level must be one of {ecmwf_winds.PRESSURE_LEVELS} hPa, got {args.wind_level}")
     if not 10 <= args.wind_spacing <= 400:
@@ -438,9 +464,9 @@ def run(args) -> dict:
     check_segments_cover_bbox(bbox, segments)
 
     s3 = s3_client()
-    scan, keys = select_scan(s3, segments, requested, args.lookback_hours)
+    scan, keys = select_scan(s3, segments, requested, args.lookback_hours, bands)
     log(f"Scan {scan:%Y-%m-%d %H:%M} UTC: all {len(keys)} files present "
-        f"({', '.join(BANDS)} x segments {segments})")
+        f"({', '.join(bands)} x segments {segments}) for {', '.join(products)}")
 
     result = {
         "status": "ok",
@@ -449,7 +475,9 @@ def run(args) -> dict:
         "scan_sgt_iso": scan.astimezone(SGT).strftime("%Y-%m-%d %H:%M SGT"),
         "bbox": list(bbox),
         "segments": segments,
-        "png": None,
+        "products": products,
+        "bands": bands,
+        "outputs": [],
     }
 
     clon, clat = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
@@ -460,7 +488,7 @@ def run(args) -> dict:
         result["status"] = "skipped_night"
         annotate("notice", f"Skipped: sun is below the horizon at the bbox centre for scan "
                  f"{result['scan_utc_iso']} ({result['scan_sgt_iso']}), solar zenith {sza:.1f} deg. "
-                 "True Color is daytime only.")
+                 "These RGB products are daytime only.")
         return result
     corners = [solar_zenith(scan, lon, lat) for lon, lat in ((bbox[0], bbox[1]), (bbox[2], bbox[3]))]
     if max(corners) >= 90:
@@ -478,12 +506,10 @@ def run(args) -> dict:
     tempfile.tempdir = None
     try:
         files = download(s3, keys, work / "hsd")
-        rgb = make_rgb(files, bbox, args.resolution, args.gamma, args.rayleigh)
-        out = Path(args.outdir) / f"{scan:%Y%m%d_%H%M}.png"
         wind = None
         result["winds"] = "off"
         if args.winds:
-            # The satellite image is the main product: a wind problem must not lose it.
+            # The satellite images are the main product: a wind problem must not lose them.
             try:
                 wind = ecmwf_winds.fetch_winds(s3, scan, args.wind_level, bbox)
                 result["winds"] = wind.describe()
@@ -491,18 +517,32 @@ def run(args) -> dict:
             except Exception as exc:  # noqa: BLE001 - deliberately broad, see above
                 result["winds"] = f"skipped: {exc}"
                 annotate("warning", f"Wind streamlines skipped ({type(exc).__name__}: {exc}); "
-                         "the image is published without them.")
-        try:
-            overlay_and_save(rgb, scan, args.gamma, args.rayleigh, out, bbox, args.resolution,
-                             args.coast_width if args.coastlines else 0.0, wind, args.wind_spacing)
-        except Exception as exc:  # noqa: BLE001
-            if wind is None:
-                raise
-            result["winds"] = f"skipped: drawing failed: {exc}"
-            annotate("warning", f"Drawing wind streamlines failed ({type(exc).__name__}: {exc}); "
-                     "publishing without them.")
-            overlay_and_save(rgb, scan, args.gamma, args.rayleigh, out, bbox, args.resolution,
-                             args.coast_width if args.coastlines else 0.0)
+                         "the images are published without them.")
+        coast_width = args.coast_width if args.coastlines else 0.0
+        for name in products:
+            prod = PRODUCTS[name]
+            gamma = args.gamma if args.gamma is not None else prod["gamma"]
+            use_rayleigh = bool(args.rayleigh and prod["rayleigh"])
+            log(f"--- {prod['label']}: R/G/B = {'/'.join(prod['bands'])}, gamma {gamma:g}"
+                + (f", Rayleigh {'on' if use_rayleigh else 'off'}" if prod["rayleigh"] else ""))
+            rgb = make_rgb(files, bbox, args.resolution, prod, gamma, use_rayleigh)
+            out = Path(args.outdir) / prod["subdir"] / f"{scan:%Y%m%d_%H%M}.png"
+            try:
+                overlay_and_save(rgb, scan, prod, gamma, use_rayleigh, out, bbox, args.resolution,
+                                 coast_width, wind, args.wind_spacing)
+            except Exception as exc:  # noqa: BLE001
+                if wind is None:
+                    raise
+                result["winds"] = f"skipped: drawing failed: {exc}"
+                annotate("warning", f"Drawing wind streamlines failed ({type(exc).__name__}: {exc}); "
+                         "publishing without them.")
+                wind = None  # later products skip them too
+                overlay_and_save(rgb, scan, prod, gamma, use_rayleigh, out, bbox, args.resolution, coast_width)
+            result["outputs"].append({
+                "product": name, "label": prod["label"], "png": str(out), "subdir": prod["subdir"],
+                "size_px": [int(rgb.shape[1]), int(rgb.shape[0])], "gamma": gamma, "rayleigh": use_rayleigh,
+            })
+            log(f"Wrote {out} ({out.stat().st_size / 1e6:.1f} MB, {rgb.shape[1]}x{rgb.shape[0]})")
     finally:
         shutil.rmtree(work, ignore_errors=True)
         if old_tmp is None:
@@ -511,9 +551,6 @@ def run(args) -> dict:
             os.environ["TMPDIR"] = old_tmp
         tempfile.tempdir = None
     log(f"Deleted downloaded HSD files ({work})")
-    result["png"] = str(out)
-    result["size_px"] = [int(rgb.shape[1]), int(rgb.shape[0])]
-    log(f"Wrote {out} ({out.stat().st_size / 1e6:.1f} MB, {rgb.shape[1]}x{rgb.shape[0]})")
     return result
 
 

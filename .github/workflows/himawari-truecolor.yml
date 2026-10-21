@@ -1,6 +1,7 @@
-name: Himawari True Color
+name: Himawari RGB
 
 # Manual only (also runnable from the GitHub mobile app). No schedule on purpose.
+# Builds True Color and/or Natural Fire Color RGB (JMA recipes) from the public NOAA NODD bucket.
 on:
   workflow_dispatch:
     inputs:
@@ -9,15 +10,24 @@ on:
         required: false
         default: ""
         type: string
+      product:
+        description: "Which image(s): both, true_color or natural_fire_color (fire hotspots, burn scars, smoke)"
+        required: false
+        default: both
+        type: choice
+        options:
+          - both
+          - true_color
+          - natural_fire_color
       bbox:
         description: "Region west,south,east,north in degrees (default: Sumatra, Malay Peninsula, Singapore, Borneo)"
         required: false
         default: "94.5,-6.5,119.5,7.5"
         type: string
       gamma:
-        description: "Gamma (1.7 default; try 2.0 for hazy scenes)"
+        description: "Gamma override. Blank = each product's default (1.7 true color, 1.0 fire color); try 2.0 for hazy true color"
         required: false
-        default: "1.7"
+        default: ""
         type: string
       segments:
         description: "Full-disk segments to download, 1 = north ... 10 = south (5-6 covers about 10N to 10S)"
@@ -30,17 +40,17 @@ on:
         default: "0.01"
         type: string
       winds:
-        description: "Overlay ECMWF 925 hPa wind streamlines (orange). If ECMWF data fail the image is still published without them"
+        description: "Overlay ECMWF 925 hPa wind streamlines (orange). If ECMWF data fail the images are still published without them"
         required: false
         default: true
         type: boolean
       coastlines:
-        description: "Draw green coastlines (Natural Earth 1:10m); untick for a clean image"
+        description: "Draw coastlines (Natural Earth 1:10m; green, or magenta on fire color); untick for clean images"
         required: false
         default: true
         type: boolean
       rayleigh:
-        description: "Apply Rayleigh correction (on by default; untick for the plain JMA recipe, a bit faster)"
+        description: "True color only: apply Rayleigh correction (on by default; untick for the plain JMA recipe, a bit faster)"
         required: false
         default: true
         type: boolean
@@ -54,7 +64,7 @@ permissions:
   contents: write
 
 jobs:
-  truecolor:
+  rgb:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -79,16 +89,17 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Cache pyspectral data (Rayleigh LUTs)
-        if: ${{ inputs.rayleigh }}
+        if: ${{ inputs.rayleigh && inputs.product != 'natural_fire_color' }}
         uses: actions/cache@v4
         with:
           path: .pyspectral-data
           key: pyspectral-${{ runner.os }}-v1
 
-      - name: Build True Color image
+      - name: Build RGB image(s)
         id: build
         env:
           IN_DATETIME: ${{ inputs.datetime_utc }}
+          IN_PRODUCT: ${{ inputs.product }}
           IN_BBOX: ${{ inputs.bbox }}
           IN_GAMMA: ${{ inputs.gamma }}
           IN_SEGMENTS: ${{ inputs.segments }}
@@ -99,14 +110,15 @@ jobs:
         run: |
           args=(
             --datetime-utc "$IN_DATETIME"
+            --product "$IN_PRODUCT"
             --bbox "$IN_BBOX"
-            --gamma "$IN_GAMMA"
             --segments "$IN_SEGMENTS"
             --resolution "$IN_RESOLUTION"
             --outdir output
             --workdir "$RUNNER_TEMP"
             --json-out output/result.json
           )
+          if [ -n "${IN_GAMMA// /}" ]; then args+=(--gamma "$IN_GAMMA"); fi
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
           if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
           if [ "$IN_WINDS" = "true" ]; then args+=(--winds); else args+=(--no-winds); fi
@@ -118,7 +130,6 @@ jobs:
         run: |
           if [ -f output/result.json ]; then
             echo "status=$(jq -r .status output/result.json)" >> "$GITHUB_OUTPUT"
-            echo "png=$(jq -r '.png // empty' output/result.json)" >> "$GITHUB_OUTPUT"
           else
             echo "status=error" >> "$GITHUB_OUTPUT"
           fi
@@ -127,8 +138,10 @@ jobs:
         if: ${{ steps.result.outputs.status == 'ok' }}
         uses: actions/upload-artifact@v4
         with:
-          name: himawari-truecolor-${{ github.run_id }}
-          path: ${{ steps.result.outputs.png }}
+          name: himawari-rgb-${{ github.run_id }}
+          path: |
+            output/*.png
+            output/naturalfire/*.png
           if-no-files-found: error
           retention-days: 30
 
@@ -136,10 +149,9 @@ jobs:
         if: ${{ steps.result.outputs.status == 'ok' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          PNG: ${{ steps.result.outputs.png }}
         run: |
           set -euo pipefail
-          name=$(basename "$PNG")
+          result="$GITHUB_WORKSPACE/output/result.json"
           pub="$RUNNER_TEMP/publish"
           rm -rf "$pub"; mkdir -p "$pub"
 
@@ -149,25 +161,32 @@ jobs:
             git archive FETCH_HEAD | tar -x -C "$pub"
           fi
 
-          cp "$PNG" "$pub/$name"
-          cp "$PNG" "$pub/latest.png"
-          # Keep only the newest N timestamped images (names sort chronologically).
-          ls -1 "$pub" | grep -E '^[0-9]{8}_[0-9]{4}\.png$' | sort | head -n "-$KEEP_IMAGES" \
-            | while read -r old; do rm -f "$pub/$old"; done
+          # One folder per product: True Color at the top level (so existing links keep working),
+          # the others in subfolders. Each gets <scan>.png plus latest.png, newest N kept.
+          while IFS='|' read -r product png sub; do
+            dir="$pub${sub:+/$sub}"
+            mkdir -p "$dir"
+            name=$(basename "$png")
+            cp "$GITHUB_WORKSPACE/$png" "$dir/$name"
+            cp "$GITHUB_WORKSPACE/$png" "$dir/latest.png"
+            ls -1 "$dir" | grep -E '^[0-9]{8}_[0-9]{4}\.png$' | sort | head -n "-$KEEP_IMAGES" \
+              | while read -r old; do rm -f "$dir/$old"; done
+            echo "Published $product -> ${sub:+$sub/}$name"
+          done < <(jq -r '.outputs[] | [.product, .png, .subdir] | join("|")' "$result")
 
           # Static site (index.html + thumbnails) served by GitHub Pages from this branch.
           python "$GITHUB_WORKSPACE/scripts/build_site.py" "$pub"
 
           # Orphan branch holding a single fresh commit: history never grows, so the
-          # repo stays small even though every commit adds a ~5 MB PNG.
+          # repo stays small even though every commit adds ~5 MB PNGs.
           cd "$pub"
           git init -q -b "$OUTPUT_BRANCH"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -q -m "Himawari True Color $(jq -r .scan_utc_iso "$GITHUB_WORKSPACE/output/result.json")"
+          git commit -q -m "Himawari RGB $(jq -r .scan_utc_iso "$result")"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$OUTPUT_BRANCH"
-          echo "Pushed $(ls -1 | grep -c '\.png$') PNGs to $OUTPUT_BRANCH"
+          echo "Pushed $(find . -name '*.png' | wc -l) PNGs to $OUTPUT_BRANCH"
 
       - name: Job summary
         if: ${{ always() }}
@@ -177,24 +196,27 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           r=output/result.json
+          owner="${REPO%%/*}"; repo_name="${REPO#*/}"
           {
-            echo "## Himawari-9 True Color"
+            echo "## Himawari-9 RGB"
             case "$STATUS" in
               ok)
-                name=$(basename "$(jq -r .png $r)")
                 echo "**Scan:** $(jq -r .scan_utc_iso $r) / $(jq -r .scan_sgt_iso $r)  "
-                echo "**Image:** \`$OUTPUT_BRANCH:$name\` ($(jq -r '.size_px | "\(.[0])x\(.[1])"' $r) px)  "
                 echo "**Sun zenith at bbox centre:** $(jq -r .sun_zenith_centre $r)°  "
-                echo "**Segments:** $(jq -r '.segments | map(tostring) | join(",")' $r), bands B01/B02/B03 (all files present)  "
+                echo "**Segments:** $(jq -r '.segments | map(tostring) | join(",")' $r), bands $(jq -r '.bands | join("/")' $r) (all files present)  "
                 echo "**Winds:** $(jq -r '.winds // "n/a"' $r)"
                 echo
-                echo "- [This image]($SERVER/$REPO/blob/$OUTPUT_BRANCH/$name)"
-                echo "- [latest.png]($SERVER/$REPO/blob/$OUTPUT_BRANCH/latest.png)"
+                while IFS='|' read -r label png sub size; do
+                  name=$(basename "$png"); path="${sub:+$sub/}"
+                  echo "- **$label** ($size px): [\`$OUTPUT_BRANCH:$path$name\`]($SERVER/$REPO/blob/$OUTPUT_BRANCH/$path$name), [latest]($SERVER/$REPO/blob/$OUTPUT_BRANCH/${path}latest.png)"
+                done < <(jq -r '.outputs[] | [.label, .png, .subdir, "\(.size_px[0])x\(.size_px[1])"] | join("|")' $r)
+                echo
+                echo "- Website: https://$owner.github.io/$repo_name/"
                 echo "- Also attached to this run as an artifact."
                 ;;
               skipped_night)
                 echo "**Skipped (night):** scan $(jq -r .scan_utc_iso $r) / $(jq -r .scan_sgt_iso $r)," \
-                     "sun zenith $(jq -r .sun_zenith_centre $r)° at the bbox centre. True Color is daytime only; no image made."
+                     "sun zenith $(jq -r .sun_zenith_centre $r)° at the bbox centre. These RGB products are daytime only; no image made."
                 ;;
               *)
                 echo "**Failed.** $(jq -r '.message // "see the log"' $r 2>/dev/null || echo "see the log")"

@@ -164,6 +164,9 @@ Downloaded HSD files are deleted after processing.
   from the sub-satellite point at 140.7°E), so detail there is a little coarser. This is geometry, not a bug.
 - True Color: Rayleigh correction is on by default. With it off (the plain JMA recipe) the image has a bluish/grey
   veil, especially toward the edges and over haze. `gamma: 2.0` can help with smoke haze either way.
+- The caption box is in the **bottom-right** corner, which for the default box is open sea (Java Sea) and leaves
+  southern Sumatra and Kalimantan visible. For another `bbox` it may cover land: locally use
+  `--caption-corner bottom-left|bottom-right|top-left|top-right` (the workflow always uses the default).
 - Output is nearest-neighbour resampled to a lat/lon grid. Coastlines are Natural Earth 1:10m, which matches the
   ~1 km pixels; very small islets and reefs may be missing, and lines are drawn over clouds.
 

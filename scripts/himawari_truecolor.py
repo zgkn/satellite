@@ -465,7 +465,8 @@ def gamma_text(gammas) -> str:
 
 def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bool, out: Path,
                      bbox=None, resolution=None, coast_width: float = 0.0,
-                     wind=None, wind_spacing: float = 45.0, notes=()) -> None:
+                     wind=None, wind_spacing: float = 45.0, notes=(),
+                     corner: str = "bottom-right") -> None:
     from PIL import Image, ImageDraw
 
     img = Image.fromarray(rgb, "RGB").convert("RGBA")
@@ -497,7 +498,8 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
     boxes = [d.textbbox((0, 0), t, font=f) for t, f, _ in lines]
     bw = max(b[2] - b[0] for b in boxes) + 2 * pad
     bh = sum(b[3] - b[1] for b in boxes) + gap * (len(lines) - 1) + 2 * pad
-    x0, y0 = pad, img.height - bh - pad
+    x0 = pad if corner.endswith("left") else img.width - bw - pad
+    y0 = pad if corner.startswith("top") else img.height - bh - pad
     d.rectangle([x0, y0, x0 + bw, y0 + bh], fill=(0, 0, 0, 140))
     y = y0 + pad
     for (text, font, fill), b in zip(lines, boxes):
@@ -537,6 +539,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="warn (log, annotation, caption note) when the sun zenith at the bbox centre or its west/east "
                         "edge exceeds this many degrees; the sun-angle correction overshoots and noise grows there "
                         "(default 65)")
+    p.add_argument("--caption-corner", choices=("bottom-right", "bottom-left", "top-right", "top-left"),
+                   default="bottom-right",
+                   help="where the caption box goes; the default keeps it off southern Sumatra for the default bbox "
+                        "(bottom-right is open sea there)")
     p.add_argument("--winds", action=argparse.BooleanOptionalAction, default=True,
                    help="overlay ECMWF IFS wind streamlines (default on; skipped with a warning if ECMWF data fail)")
     p.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa for the streamlines")
@@ -665,7 +671,7 @@ def run(args) -> dict:
             out = Path(args.outdir) / prod["subdir"] / f"{scan:%Y%m%d_%H%M}.png"
             try:
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution,
-                                 coast_width, wind, args.wind_spacing, notes)
+                                 coast_width, wind, args.wind_spacing, notes, args.caption_corner)
             except Exception as exc:  # noqa: BLE001
                 if wind is None:
                     raise
@@ -674,7 +680,7 @@ def run(args) -> dict:
                          "publishing without them.")
                 wind = None  # later products skip them too
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution, coast_width,
-                                 None, args.wind_spacing, notes)
+                                 None, args.wind_spacing, notes, args.caption_corner)
             result["outputs"].append({
                 "product": name, "label": prod["label"], "png": str(out), "subdir": prod["subdir"],
                 "size_px": [int(rgb.shape[1]), int(rgb.shape[0])], "gamma": gamma_text(gammas),

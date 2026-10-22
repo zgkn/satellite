@@ -21,8 +21,10 @@ default, so you can just tap *Run workflow*. It takes about 3-4 minutes for both
 **Where the results go**
 
 - Workflow artifact `himawari-rgb-<run id>` (all PNGs of the run).
-- Orphan branch `himawari-output`, newest 48 images per product kept, rewritten as a single commit on every run so it
-  never accumulates history:
+- Orphan branch `himawari-output`, rewritten as a single commit on every run so it never accumulates history. Each run
+  also does housekeeping (`scripts/housekeeping.py`): **images whose scan time is more than 2 days old are removed**
+  (change `KEEP_DAYS` in the workflow), except the images just published and `latest.png`. Nothing newer than 2 days is
+  ever removed, so the number of images depends on how often you run it. Layout:
   - True Color: `YYYYMMDD_HHMM.png` and `latest.png` at the top level, e.g.
     `https://github.com/<owner>/satellite/blob/himawari-output/latest.png` (works in the mobile app).
   - Day Fire: the same names inside `dayfire/`, e.g. `.../blob/himawari-output/dayfire/latest.png`.

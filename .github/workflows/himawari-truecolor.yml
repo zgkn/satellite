@@ -79,7 +79,7 @@ jobs:
     timeout-minutes: 30
     env:
       OUTPUT_BRANCH: himawari-output
-      KEEP_IMAGES: "48"
+      KEEP_DAYS: "2"  # published images older than this many days are removed (scripts/housekeeping.py)
       PSP_DATA_ROOT: ${{ github.workspace }}/.pyspectral-data
     steps:
       - uses: actions/checkout@v4
@@ -176,17 +176,20 @@ jobs:
           fi
 
           # One folder per product: True Color at the top level (so existing links keep working),
-          # the others in subfolders. Each gets <scan>.png plus latest.png, newest N kept.
+          # the others in subfolders. Each gets <scan>.png plus latest.png.
           while IFS='|' read -r product png sub; do
             dir="$pub${sub:+/$sub}"
             mkdir -p "$dir"
             name=$(basename "$png")
             cp "$GITHUB_WORKSPACE/$png" "$dir/$name"
             cp "$GITHUB_WORKSPACE/$png" "$dir/latest.png"
-            ls -1 "$dir" | grep -E '^[0-9]{8}_[0-9]{4}\.png$' | sort | head -n "-$KEEP_IMAGES" \
-              | while read -r old; do rm -f "$dir/$old"; done
             echo "Published $product -> ${sub:+$sub/}$name"
           done < <(jq -r '.outputs[] | [.product, .png, .subdir] | join("|")' "$result")
+
+          # Housekeeping: drop images whose scan time is more than KEEP_DAYS old (never the ones
+          # just published, never latest.png). Thumbnails of removed images go in build_site.py.
+          mapfile -t just_published < <(jq -r '.outputs[].png | split("/")[-1]' "$result" | sort -u)
+          python "$GITHUB_WORKSPACE/scripts/housekeeping.py" "$pub" --max-age-days "$KEEP_DAYS" --keep "${just_published[@]}"
 
           # Static site (index.html + thumbnails) served by GitHub Pages from this branch.
           python "$GITHUB_WORKSPACE/scripts/build_site.py" "$pub"

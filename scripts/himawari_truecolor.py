@@ -463,14 +463,58 @@ def gamma_text(gammas) -> str:
     return f"{gammas[0]:g}" if len(set(gammas)) == 1 else "/".join(f"{g:g}" for g in gammas)
 
 
+GRATICULE_LINE_ALPHA = 46    # of 255: faint, so the picture underneath is barely changed
+GRATICULE_LABEL_ALPHA = 150
+
+
+def draw_graticule(img, bbox, resolution: float, step: float):
+    """Faint lat/lon lines every ``step`` degrees, labelled on the top (longitude) and left (latitude) edges."""
+    import math
+
+    from PIL import Image, ImageDraw
+
+    w, s, e, n = bbox
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    size = max(11, round(img.height / 70))
+    font = _font(size)
+    label = (255, 255, 255, GRATICULE_LABEL_ALPHA)
+    halo = (0, 0, 0, 120)
+    line = (255, 255, 255, GRATICULE_LINE_ALPHA)
+
+    def ticks(lo, hi):
+        k = math.ceil(lo / step - 1e-9)
+        while k * step <= hi + 1e-9:
+            yield k * step
+            k += 1
+
+    n_lines = 0
+    for lon in ticks(w, e):
+        x = (lon - w) / resolution
+        d.line([(x, 0), (x, img.height)], fill=line, width=1)
+        txt = f"{abs(lon):g}\N{DEGREE SIGN}{'E' if lon >= 0 else 'W'}"
+        d.text((x + 4, 3), txt, font=font, fill=label, stroke_width=1, stroke_fill=halo)
+        n_lines += 1
+    for lat in ticks(s, n):
+        y = (n - lat) / resolution
+        d.line([(0, y), (img.width, y)], fill=line, width=1)
+        txt = f"{abs(lat):g}\N{DEGREE SIGN}{'N' if lat >= 0 else 'S'}" if lat != 0 else "0\N{DEGREE SIGN}"
+        d.text((4, y + 3), txt, font=font, fill=label, stroke_width=1, stroke_fill=halo)
+        n_lines += 1
+    log(f"Drew {n_lines} graticule lines every {step:g}\N{DEGREE SIGN}")
+    return Image.alpha_composite(img, layer)
+
+
 def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bool, out: Path,
                      bbox=None, resolution=None, coast_width: float = 0.0,
                      wind=None, wind_spacing: float = 45.0, notes=(),
-                     corner: str = "bottom-right") -> None:
+                     corner: str = "bottom-right", grid_step: float = 0.0) -> None:
     from PIL import Image, ImageDraw
 
     img = Image.fromarray(rgb, "RGB").convert("RGBA")
-    if wind is not None:  # layer order: image, streamlines, coastlines, text
+    if grid_step > 0:  # layer order: image, graticule, streamlines, coastlines, text
+        img = draw_graticule(img, bbox, resolution, grid_step)
+    if wind is not None:
         img = ecmwf_winds.draw_streamlines(img, wind, bbox, resolution, wind_spacing)
     if coast_width > 0:
         draw_coastline(img, bbox, resolution, coast_width, product["coast_rgba"])
@@ -527,6 +571,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--coastlines", action=argparse.BooleanOptionalAction, default=True,
                    help="draw Natural Earth 1:10m coastlines (default on; green, magenta on day_fire)")
     p.add_argument("--coast-width", type=float, default=1.5, help="coastline width in output pixels")
+    p.add_argument("--graticule", action=argparse.BooleanOptionalAction, default=True,
+                   help="draw faint, labelled lat/lon lines (default on)")
+    p.add_argument("--grid-step", type=float, default=5.0, help="graticule spacing in degrees (default 5)")
     p.add_argument("--cloud-cue", action=argparse.BooleanOptionalAction, default=True,
                    help="day_fire only: show cold cloud (10.4 um brightness temperature below ~290 K) in grey so it "
                         "stands apart from smoke (default on; an addition to the NOAA/CIRA recipe)")
@@ -565,6 +612,8 @@ def run(args) -> dict:
         raise UserError(f"gamma must be between 0.2 and 5, got {args.gamma}")
     if args.cloud_bt is not None and not 250 <= args.cloud_bt <= 320:
         raise UserError(f"cloud-bt must be between 250 and 320 K, got {args.cloud_bt}")
+    if args.graticule and not 0.5 <= args.grid_step <= 30:
+        raise UserError(f"grid-step must be between 0.5 and 30 degrees, got {args.grid_step}")
     if not 30 <= args.low_sun_zenith <= 90:
         raise UserError(f"low-sun-zenith must be between 30 and 90 degrees, got {args.low_sun_zenith}")
     products = list(PRODUCTS) if args.product == "all" else [args.product]
@@ -646,6 +695,7 @@ def run(args) -> dict:
                 annotate("warning", f"Wind streamlines skipped ({type(exc).__name__}: {exc}); "
                          "the images are published without them.")
         coast_width = args.coast_width if args.coastlines else 0.0
+        grid_step = args.grid_step if args.graticule else 0.0
         for name in products:
             prod = PRODUCTS[name]
             gammas = tuple(c[4] for c in prod["channels"])
@@ -671,7 +721,7 @@ def run(args) -> dict:
             out = Path(args.outdir) / prod["subdir"] / f"{scan:%Y%m%d_%H%M}.png"
             try:
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution,
-                                 coast_width, wind, args.wind_spacing, notes, args.caption_corner)
+                                 coast_width, wind, args.wind_spacing, notes, args.caption_corner, grid_step)
             except Exception as exc:  # noqa: BLE001
                 if wind is None:
                     raise
@@ -680,7 +730,7 @@ def run(args) -> dict:
                          "publishing without them.")
                 wind = None  # later products skip them too
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution, coast_width,
-                                 None, args.wind_spacing, notes, args.caption_corner)
+                                 None, args.wind_spacing, notes, args.caption_corner, grid_step)
             result["outputs"].append({
                 "product": name, "label": prod["label"], "png": str(out), "subdir": prod["subdir"],
                 "size_px": [int(rgb.shape[1]), int(rgb.shape[0])], "gamma": gamma_text(gammas),

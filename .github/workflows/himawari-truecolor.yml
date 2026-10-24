@@ -49,6 +49,11 @@ on:
         required: false
         default: true
         type: boolean
+      graticule:
+        description: "Draw faint labelled lat/lon lines every 5 degrees; untick for a clean image"
+        required: false
+        default: true
+        type: boolean
       cloud_cue:
         description: "Day fire only: show cold cloud (10.4 um below ~290 K) in grey so it stands apart from smoke"
         required: false
@@ -117,6 +122,7 @@ jobs:
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
           IN_COASTLINES: ${{ inputs.coastlines }}
           IN_WINDS: ${{ inputs.winds }}
+          IN_GRATICULE: ${{ inputs.graticule }}
           IN_CLOUD_CUE: ${{ inputs.cloud_cue }}
           IN_SUN_CORRECTION: ${{ inputs.sun_correction }}
         run: |
@@ -134,6 +140,7 @@ jobs:
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
           if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
           if [ "$IN_WINDS" = "true" ]; then args+=(--winds); else args+=(--no-winds); fi
+          if [ "$IN_GRATICULE" = "true" ]; then args+=(--graticule); else args+=(--no-graticule); fi
           if [ "$IN_CLOUD_CUE" = "true" ]; then args+=(--cloud-cue); else args+=(--no-cloud-cue); fi
           if [ "$IN_SUN_CORRECTION" = "true" ]; then args+=(--sun-correction); else args+=(--no-sun-correction); fi
           python scripts/himawari_truecolor.py "${args[@]}"

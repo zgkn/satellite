@@ -76,9 +76,10 @@ of the caption box.
   stand out and the surface still shows through.
 - **Darkness:** the base is a grey IR ramp (black about +47 °C, light grey at -20 °C) and everything colder than -20 °C is
   opaque colour. The +47 °C black point is an estimate: the reference image does not say where its grey ramp starts.
-- **Sunrise and sunset:** the two looks are blended **per pixel by sun angle** (fully day at 75°, fully night at 90°
-  zenith), so the terminator fades instead of showing a seam. The caption gives the sunlit share of the area when it
-  is partial.
+- **Sunrise and sunset:** the two looks are blended **per pixel by sun angle** (True Color in full up to 60° zenith,
+  fading to grey IR at 90°; `FULL_DAY_ZENITH` and `NIGHT_ZENITH` in `ir_scale.py`), so the terminator fades instead of
+  showing a seam. The fade starts that early because beyond about 60° the sun-angle and Rayleigh corrections brighten
+  and wash out True Color. The caption gives the True Color share of the area when it is partial.
 - **Night behaviour:** the existing night check (sun below the horizon at the bbox centre) skips True Color and Day Fire
   as before, but IR Enhanced still runs, downloading only B13 (2 files) unless some part of the box is sunlit. With
   `product: all` at night you get just the IR image plus a notice and a "Night" line in the job summary; if only

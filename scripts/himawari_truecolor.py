@@ -491,13 +491,15 @@ def make_ir_enhanced(tc_rgb, bt, zen):
 
     ``tc_rgb`` is the True Color picture (None if no part of the box is sunlit), ``bt`` the 10.4 um brightness
     temperature in K and ``zen`` the per-pixel sun zenith. The base is True Color where the sun is up and a grey
-    IR ramp where it is down, blended by sun angle (fully day at 75 deg, fully night at 90 deg). On top goes the
+    IR ramp where it is down, blended by sun angle (fully day up to ir_scale.FULL_DAY_ZENITH, fully night at
+    ir_scale.NIGHT_ZENITH, smooth-step between). On top goes the
     CIMSS colour: translucent in daylight (see ir_scale), opaque in darkness wherever colder than -20 C.
     """
     import numpy as np
 
     temp = np.nan_to_num(_smooth_bt(bt) - 273.15, nan=ir_scale.GREY_BLACK_C)  # no data: treated as warm
-    day = _smoothstep((90.0 - zen) / 15.0).astype("float32")[..., None]
+    day = _smoothstep((ir_scale.NIGHT_ZENITH - zen) / (ir_scale.NIGHT_ZENITH - ir_scale.FULL_DAY_ZENITH))
+    day = day.astype("float32")[..., None]
     base_day = tc_rgb.astype("float32") / 255.0 if tc_rgb is not None else np.zeros(temp.shape + (3,), "float32")
     span = ir_scale.GREY_BLACK_C - ir_scale.WARM_C
     grey = (np.clip((ir_scale.GREY_BLACK_C - temp) / span, 0.0, 1.0) * ir_scale.GREY_AT_WARM_C)[..., None]
@@ -886,8 +888,8 @@ def run(args) -> dict:
                     notes.append(f"Cold cloud over True Color: clear at {ir_scale.WARM_C} C, "
                                  f"{ir_scale.DAY_ALPHA:.0%} opaque from {ir_scale.DAY_FULL_C:.0f} C")
                     if day_frac < 0.995:
-                        notes.append(f"{day_frac:.0%} of the area sunlit; the rest is grey IR with opaque colour")
-                log(f"  IR Enhanced: {day_frac:.1%} of the area sunlit")
+                        notes.append(f"True Color over {day_frac:.0%} of the area; the rest fades to grey IR with opaque colour")
+                log(f"  IR Enhanced: True Color weight {day_frac:.1%} of the area")
             else:
                 rgb = make_rgb(files, bbox, args.resolution, prod, gammas, use_rayleigh, cue, sun)
             if cue:

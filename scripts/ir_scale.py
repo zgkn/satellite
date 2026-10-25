@@ -31,6 +31,12 @@ GREY_AT_WARM_C = 197 / 255
 DAY_FULL_C = -40.0
 DAY_ALPHA = 0.70
 
+# Day/night blend by sun zenith: True Color is shown in full up to FULL_DAY_ZENITH and fades out to grey IR at
+# NIGHT_ZENITH (smooth-step in between). 60 deg, not higher: past it the sun-angle (and Rayleigh) correction
+# brightens and washes out the picture, so the fade to infrared starts early.
+FULL_DAY_ZENITH = 60.0
+NIGHT_ZENITH = 90.0
+
 
 def css_gradient() -> str:
     """CSS linear-gradient from WARM_C (left) to COLD_C (right), for the website legend."""

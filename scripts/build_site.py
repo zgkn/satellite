@@ -53,7 +53,7 @@ SECTIONS = (
              "By day the overlay is clear at &minus;20&nbsp;&deg;C and 70&nbsp;% opaque from &minus;40&nbsp;&deg;C and colder, "
              "so the surface stays visible under cloud. Where the sun is down, warm surfaces are grey (black is "
              "about +47&nbsp;&deg;C, an estimate) and everything colder than &minus;20&nbsp;&deg;C is opaque colour. "
-             "The two blend by sun angle, so dawn and dusk fade smoothly. The infrared band has 2&nbsp;km pixels "
+             "The two blend by sun angle (True Color in full up to 60&deg; zenith, grey IR at 90&deg;), so dawn and dusk fade smoothly. The infrared band has 2&nbsp;km pixels "
              "(lightly smoothed here). Cold cloud tops are high, thick, usually convective cloud.",
     ),
     dict(

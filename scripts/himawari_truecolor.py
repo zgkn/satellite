@@ -14,6 +14,10 @@ Products (each channel: scaled min..max, clip, ** (1/gamma)):
                         ~290 K, is blended to grey so it stands apart from smoke, and the 0.86/0.64 um
                         channels are divided by cos(sun zenith), capped at 80 deg, so brightness does not
                         follow the sun - all three are additions to the guide)
+    ir_enhanced         True Color with a translucent colour overlay of the 10.4 um band (B13, brightness
+                        temperature) in the CIMSS Clean IR Window colours (scripts/ir_scale.py); where the sun is
+                        down it is IR only: grey for warm surfaces, opaque colour for cold cloud. The two are
+                        blended per pixel by sun angle, so dawn and dusk fade smoothly. Runs day and night.
 
 The Satpy built-in composites are deliberately NOT used, because they apply extra
 corrections.  The bands are loaded, resampled and stacked by hand.  The reflectance is
@@ -21,7 +25,7 @@ Satpy's plain albedo (radiance x the file's albedo coefficient, no sun-angle div
 as in the JMA guide.
 
 Exit status: 0 on success or on a deliberate night-time skip (see the ``status``
-field of the --json-out file), 2 for expected failures (missing data, bbox outside
+field of the --json-out file; at night only ir_enhanced still runs), 2 for expected failures (missing data, bbox outside
 the downloaded segments, bad arguments), 1 for anything unexpected.
 """
 from __future__ import annotations
@@ -39,6 +43,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling modules, wherever it is run from
 import ecmwf_winds  # noqa: E402
+import ir_scale  # noqa: E402
 
 BUCKET = "noaa-himawari9"
 PRODUCT = "AHI-L1b-FLDK"
@@ -72,6 +77,15 @@ PRODUCTS = {
         # so noise near the horizon is not blown up. Also an addition to the guide, whose examples are near noon.
         sun_correction=dict(limit=80.0),
         subdir="dayfire", coast_rgba=(255, 60, 255, 255)),
+    # True Color (channels = its recipe) + B13 10.4 um brightness temperature (extra_bands). ir: built by
+    # make_ir_enhanced, not make_rgb. night_ok: still runs when the sun is down at the bbox centre (True Color
+    # bands are then only downloaded if some part of the box is sunlit). wind_rgb: white streamlines, as orange
+    # is lost against the red/yellow of cold cloud. The coastline stays green like True Color.
+    "ir_enhanced": dict(
+        label="IR Enhanced", recipe="True Color + 10.4 um IR", uniform_gamma=True, rayleigh=True,
+        channels=(("B03", _REFL, 0, 100, 1.7), ("B02", _REFL, 0, 100, 1.7), ("B01", _REFL, 0, 100, 1.7)),
+        extra_bands=("B13",), ir=True, night_ok=True,
+        subdir="ir", coast_rgba=(40, 255, 70, 255), wind_rgb=(255, 255, 255)),
 }
 for _p in PRODUCTS.values():
     _p["bands"] = tuple(c[0] for c in _p["channels"])  # (R, G, B) bands
@@ -318,6 +332,41 @@ def band_of(path: Path) -> str | None:
     return f"B{m['band']}" if m else None
 
 
+def target_area(bbox, resolution):
+    """The lat/lon pyresample area (and its width, height) that every product is resampled to."""
+    from pyresample.geometry import AreaDefinition
+
+    w, s, e, n = bbox
+    width = int(round((e - w) / resolution))
+    height = int(round((n - s) / resolution))
+    area = AreaDefinition(
+        "bbox", "bbox lat/lon", "bbox",
+        {"proj": "longlat", "datum": "WGS84", "no_defs": None},
+        width, height, (w, n - height * resolution, w + width * resolution, n),
+    )
+    return area, width, height
+
+
+def zenith_grid(scan: dt.datetime, bbox, resolution, width, height):
+    """Sun zenith angle (degrees) at the centre of every output pixel at ``scan``."""
+    import numpy as np
+    from pyorbital.astronomy import sun_zenith_angle
+
+    w, _, _, n = bbox
+    lons = np.broadcast_to((w + (np.arange(width) + 0.5) * resolution)[None, :], (height, width))
+    lats = np.broadcast_to((n - (np.arange(height) + 0.5) * resolution)[:, None], (height, width))
+    return sun_zenith_angle(scan.replace(tzinfo=None), lons, lats)
+
+
+def any_sunlit(scan: dt.datetime, bbox, n: int = 25) -> bool:
+    """True if the sun is above the horizon anywhere in the bbox (coarse n x n sample)."""
+    import numpy as np
+    from pyorbital.astronomy import sun_zenith_angle
+
+    gx, gy = np.meshgrid(np.linspace(bbox[0], bbox[2], n), np.linspace(bbox[1], bbox[3], n))
+    return bool((sun_zenith_angle(scan.replace(tzinfo=None), gx, gy) < 90.0).any())
+
+
 def make_rgb(files, bbox, resolution, product, gammas, rayleigh, cue=None, sun=None):
     """Return a uint8 (H, W, 3) array for ``product`` (a PRODUCTS entry) over the bbox.
 
@@ -328,19 +377,11 @@ def make_rgb(files, bbox, resolution, product, gammas, rayleigh, cue=None, sun=N
     """
     import dask
     import numpy as np
-    from pyresample.geometry import AreaDefinition
     from satpy import Scene
 
     dask.config.set({"array.chunk-size": "64MiB"})
 
-    w, s, e, n = bbox
-    width = int(round((e - w) / resolution))
-    height = int(round((n - s) / resolution))
-    area = AreaDefinition(
-        "bbox", "bbox lat/lon", "bbox",
-        {"proj": "longlat", "datum": "WGS84", "no_defs": None},
-        width, height, (w, n - height * resolution, w + width * resolution, n),
-    )
+    area, width, height = target_area(bbox, resolution)
     log(f"Target grid: {width} x {height} px at {resolution}\N{DEGREE SIGN}")
 
     bands = product["bands"]  # (R, G, B)
@@ -368,12 +409,8 @@ def make_rgb(files, bbox, resolution, product, gammas, rayleigh, cue=None, sun=N
     if bad > 0.01:
         annotate("warning", f"{bad:.1%} of pixels have no data (shown black)")
     if sun:
-        from pyorbital.astronomy import sun_zenith_angle
-
         scan_time, limit = sun
-        lons = np.broadcast_to((w + (np.arange(width) + 0.5) * resolution)[None, :], (height, width))
-        lats = np.broadcast_to((n - (np.arange(height) + 0.5) * resolution)[:, None], (height, width))
-        zen = sun_zenith_angle(scan_time.replace(tzinfo=None), lons, lats)
+        zen = zenith_grid(scan_time, bbox, resolution, width, height)
         cos_limit = float(np.cos(np.radians(limit)))
         factor = (1.0 / np.maximum(np.cos(np.radians(zen)), cos_limit)).astype("float32")
         refl = [band for band, cal, *_ in channels if cal == _REFL]
@@ -404,6 +441,82 @@ def make_rgb(files, bbox, resolution, product, gammas, rayleigh, cue=None, sun=N
             f"({float((weight > 0).mean()):.1%} of pixels touched, {float((weight > 0.5).mean()):.1%} mostly grey; "
             f"{band} K p1 {np.nanpercentile(cue_bt, 1):.0f} median {np.nanmedian(cue_bt):.0f})")
     return np.round(out * 255.0).astype("uint8")
+
+
+def make_bt(files, bbox, resolution, band: str):
+    """Brightness temperature (K) of ``band`` on the output grid, float32 (H, W)."""
+    import dask
+    import numpy as np
+    from satpy import Scene
+
+    dask.config.set({"array.chunk-size": "64MiB"})
+    area, _, _ = target_area(bbox, resolution)
+    scn = Scene(filenames=[str(f) for f in files if band_of(f) == band], reader="ahi_hsd")
+    scn.load([band], calibration=_BT)
+    check_loaded_coverage(scn[band].attrs["area"], bbox)
+    bt = np.asarray(dask.compute(scn.resample(area, resampler="nearest")[band].data)[0], dtype="float32")
+    log(f"  {band} K: min {np.nanmin(bt):.0f}  median {np.nanmedian(bt):.0f}  max {np.nanmax(bt):.0f}")
+    return bt
+
+
+def _smoothstep(x):
+    import numpy as np
+
+    x = np.clip(x, 0.0, 1.0)
+    return x * x * (3.0 - 2.0 * x)
+
+
+def _smooth_bt(bt, sigma: float = 0.9):
+    """B13 has 2 km pixels: a light Gaussian blur (NaN-safe) hides the blocks on the 1 km grid."""
+    import numpy as np
+    from scipy.ndimage import gaussian_filter
+
+    ok = np.isfinite(bt)
+    num = gaussian_filter(np.where(ok, bt, 0.0), sigma)
+    den = gaussian_filter(ok.astype("float32"), sigma)
+    return np.where(den > 0.05, num / np.maximum(den, 1e-6), np.nan).astype("float32")
+
+
+def ir_colours(temp_c):
+    """CIMSS colour scale (ir_scale.CIMSS_TABLE) at ``temp_c`` degrees C: float32 (..., 3) in 0..1."""
+    import numpy as np
+
+    t = np.array([row[0] for row in ir_scale.CIMSS_TABLE][::-1], dtype="float64")  # ascending for interp
+    c = np.array([row[1] for row in ir_scale.CIMSS_TABLE][::-1], dtype="float64") / 255.0
+    return np.stack([np.interp(temp_c, t, c[:, i]) for i in range(3)], axis=-1).astype("float32")
+
+
+def make_ir_enhanced(tc_rgb, bt, zen):
+    """IR Enhanced: (uint8 (H, W, 3) array, sunlit fraction of the area).
+
+    ``tc_rgb`` is the True Color picture (None if no part of the box is sunlit), ``bt`` the 10.4 um brightness
+    temperature in K and ``zen`` the per-pixel sun zenith. The base is True Color where the sun is up and a grey
+    IR ramp where it is down, blended by sun angle (fully day at 75 deg, fully night at 90 deg). On top goes the
+    CIMSS colour: translucent in daylight (see ir_scale), opaque in darkness wherever colder than -20 C.
+    """
+    import numpy as np
+
+    temp = np.nan_to_num(_smooth_bt(bt) - 273.15, nan=ir_scale.GREY_BLACK_C)  # no data: treated as warm
+    day = _smoothstep((90.0 - zen) / 15.0).astype("float32")[..., None]
+    base_day = tc_rgb.astype("float32") / 255.0 if tc_rgb is not None else np.zeros(temp.shape + (3,), "float32")
+    span = ir_scale.GREY_BLACK_C - ir_scale.WARM_C
+    grey = (np.clip((ir_scale.GREY_BLACK_C - temp) / span, 0.0, 1.0) * ir_scale.GREY_AT_WARM_C)[..., None]
+    base = day * base_day + (1.0 - day) * grey
+    cold = (temp < ir_scale.WARM_C).astype("float32")
+    day_alpha = ir_scale.DAY_ALPHA * _smoothstep((ir_scale.WARM_C - temp) / (ir_scale.WARM_C - ir_scale.DAY_FULL_C))
+    alpha = (day[..., 0] * day_alpha + (1.0 - day[..., 0]) * cold)[..., None]
+    out = (1.0 - alpha) * base + alpha * ir_colours(temp)
+    return np.round(np.clip(out, 0.0, 1.0) * 255.0).astype("uint8"), float(day.mean())
+
+
+def ir_legend() -> dict:
+    """Colour bar for the caption: the CIMSS scale from -20 C (left) to -92 C (right)."""
+    span = ir_scale.WARM_C - ir_scale.COLD_C
+    return dict(
+        title="Cloud-top temperature, 10.4 um (C); warmer than -20 = grey",
+        colours=lambda x: ir_colours(ir_scale.WARM_C - x * span),
+        ticks=[((ir_scale.WARM_C - t) / span, str(t)) for t in ir_scale.LEGEND_TICKS_C],
+    )
 
 
 def _font(size: int):
@@ -508,14 +621,21 @@ def draw_graticule(img, bbox, resolution: float, step: float):
 def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bool, out: Path,
                      bbox=None, resolution=None, coast_width: float = 0.0,
                      wind=None, wind_spacing: float = 45.0, notes=(),
-                     corner: str = "bottom-right", grid_step: float = 0.0) -> None:
+                     corner: str = "bottom-right", grid_step: float = 0.0,
+                     recipe_line: str | None = None, legend: dict | None = None) -> None:
+    """Draw graticule, streamlines, coastlines and the caption onto ``rgb`` and save it as ``out``.
+
+    ``recipe_line`` replaces the caption's third line (the recipe summary); ``legend`` is a colour bar drawn at the
+    bottom of the caption box: dict(title, colours=f(0..1 across the bar) -> (n, 3) floats in 0..1, ticks=[(frac, text)]).
+    """
+    import numpy as np
     from PIL import Image, ImageDraw
 
     img = Image.fromarray(rgb, "RGB").convert("RGBA")
     if grid_step > 0:  # layer order: image, graticule, streamlines, coastlines, text
         img = draw_graticule(img, bbox, resolution, grid_step)
     if wind is not None:
-        img = ecmwf_winds.draw_streamlines(img, wind, bbox, resolution, wind_spacing)
+        img = ecmwf_winds.draw_streamlines(img, wind, bbox, resolution, wind_spacing, product.get("wind_rgb"))
     if coast_width > 0:
         draw_coastline(img, bbox, resolution, coast_width, product["coast_rgba"])
     h = rgb.shape[0]
@@ -526,7 +646,8 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
     lines = [
         ("Himawari-9 AHI, JMA / NOAA NODD", big, white),
         (f"{scan:%Y-%m-%d %H:%M} UTC  /  {sgt:%Y-%m-%d %H:%M} SGT", big, white),
-        (f"{product['label']} ({product['recipe']})  gamma {gamma_text(gammas)}"
+        (recipe_line or
+         f"{product['label']} ({product['recipe']})  gamma {gamma_text(gammas)}"
          + (f"  Rayleigh {'on' if rayleigh else 'off'}" if product["rayleigh"] else
             "  " + " ".join(f"{k} {band}" + (f" {vmin - 273.15:.0f}-{vmax - 273.15:.0f}C" if cal == _BT else "")
                              for k, (band, cal, vmin, vmax, _) in zip("RGB", product["channels"]))), small, white),
@@ -535,13 +656,20 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
         text, fill = note if isinstance(note, tuple) else (note, (205, 205, 205, 255))
         lines.append((text, small, fill))
     if wind is not None:  # the line doubles as the legend: same colour as the streamlines
-        lines.append((f"Streamlines: {wind.describe()}", small, (*ecmwf_winds.LINE_RGB, 255)))
+        lines.append((f"Streamlines: {wind.describe()}", small, (*(product.get("wind_rgb") or ecmwf_winds.LINE_RGB), 255)))
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     pad, gap = size // 2, size // 4
     boxes = [d.textbbox((0, 0), t, font=f) for t, f, _ in lines]
-    bw = max(b[2] - b[0] for b in boxes) + 2 * pad
+    text_w = max(b[2] - b[0] for b in boxes)
     bh = sum(b[3] - b[1] for b in boxes) + gap * (len(lines) - 1) + 2 * pad
+    if legend:
+        lt_box = d.textbbox((0, 0), legend["title"], font=small)
+        text_w = max(text_w, lt_box[2] - lt_box[0])
+        bar_h = max(8, round(size * 0.75))
+        tick_h = max(d.textbbox((0, 0), t, font=small)[3] for _, t in legend["ticks"])
+        bh += gap * 2 + (lt_box[3] - lt_box[1]) + gap + bar_h + 6 + gap + tick_h
+    bw = text_w + 2 * pad
     x0 = pad if corner.endswith("left") else img.width - bw - pad
     y0 = pad if corner.startswith("top") else img.height - bh - pad
     d.rectangle([x0, y0, x0 + bw, y0 + bh], fill=(0, 0, 0, 140))
@@ -549,6 +677,18 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
     for (text, font, fill), b in zip(lines, boxes):
         d.text((x0 + pad - b[0], y - b[1]), text, font=font, fill=fill)
         y += b[3] - b[1] + gap
+    if legend:
+        x_bar, bar_w = x0 + pad, bw - 2 * pad
+        y += gap
+        d.text((x_bar - lt_box[0], y - lt_box[1]), legend["title"], font=small, fill=(205, 205, 205, 255))
+        y += lt_box[3] - lt_box[1] + gap
+        row = np.round(np.clip(legend["colours"]((np.arange(bar_w) + 0.5) / bar_w), 0, 1) * 255).astype("uint8")
+        layer.paste(Image.fromarray(np.repeat(row[None], bar_h, axis=0), "RGB"), (x_bar, y))
+        for frac, text in legend["ticks"]:
+            tx = x_bar + frac * bar_w
+            d.line([(tx, y + bar_h), (tx, y + bar_h + 5)], fill=white, width=1)
+            tb = d.textbbox((0, 0), text, font=small)
+            d.text((tx - (tb[2] - tb[0]) / 2 - tb[0], y + bar_h + 6 - tb[1]), text, font=small, fill=white)
     out.parent.mkdir(parents=True, exist_ok=True)
     Image.alpha_composite(img, layer).convert("RGB").save(out, optimize=True)
 
@@ -559,15 +699,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--datetime-utc", default="", help="scan time YYYYMMDDHHMM (UTC); blank = newest complete scan")
     p.add_argument("--bbox", default="94.5,-6.5,119.5,7.5", help="west,south,east,north in degrees")
     p.add_argument("--product", choices=(*PRODUCTS, "all"), default="all",
-                   help="which image(s) to build (default: all)")
+                   help="which image(s) to build (default: all). At night only ir_enhanced is made")
     p.add_argument("--gamma", type=float, default=None,
-                   help="gamma override for true_color (day_fire has per-channel gammas 0.4/1/1 and ignores "
+                   help="gamma override for true_color and the True Color base of ir_enhanced (day_fire has per-channel gammas 0.4/1/1 and ignores "
                         "it); default 1.7 - 2.0 can help with haze")
     p.add_argument("--segments", default="5-6", help="full-disk segments to download, e.g. 5-6")
     p.add_argument("--resolution", type=float, default=0.01, help="output pixel size in degrees (0.01 ~ 1 km)")
     p.add_argument("--rayleigh", action=argparse.BooleanOptionalAction, default=True,
-                   help="apply Satpy Rayleigh correction to true_color (default on; --no-rayleigh for the plain "
-                        "JMA recipe); day_fire never uses it")
+                   help="apply Satpy Rayleigh correction to true_color and the True Color base of ir_enhanced (default "
+                        "on; --no-rayleigh for the plain JMA recipe); day_fire never uses it")
     p.add_argument("--coastlines", action=argparse.BooleanOptionalAction, default=True,
                    help="draw Natural Earth 1:10m coastlines (default on; green, magenta on day_fire)")
     p.add_argument("--coast-width", type=float, default=1.5, help="coastline width in output pixels")
@@ -595,7 +735,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa for the streamlines")
     p.add_argument("--wind-spacing", type=float, default=45.0, help="approximate streamline spacing in output pixels")
     p.add_argument("--outdir", default="output",
-                   help="directory for the PNGs (day_fire goes in its 'dayfire' subfolder)")
+                   help="directory for the PNGs (day_fire goes in its 'dayfire' subfolder, ir_enhanced in 'ir')")
     p.add_argument("--workdir", default=None, help="scratch directory for HSD files (deleted afterwards)")
     p.add_argument("--lookback-hours", type=float, default=3.0, help="how far back to look for the newest scan")
     p.add_argument("--check-only", action="store_true", help="only list the bucket and run the checks")
@@ -617,7 +757,7 @@ def run(args) -> dict:
     if not 30 <= args.low_sun_zenith <= 90:
         raise UserError(f"low-sun-zenith must be between 30 and 90 degrees, got {args.low_sun_zenith}")
     products = list(PRODUCTS) if args.product == "all" else [args.product]
-    bands = sorted({b for p in products for b in PRODUCTS[p]["bands"]}
+    bands = sorted({b for p in products for b in PRODUCTS[p]["bands"] + PRODUCTS[p].get("extra_bands", ())}
                    | {cue[0] for p in products if (cue := cloud_cue_for(PRODUCTS[p], args))})
     if args.winds and args.wind_level not in ecmwf_winds.PRESSURE_LEVELS:
         raise UserError(f"wind level must be one of {ecmwf_winds.PRESSURE_LEVELS} hPa, got {args.wind_level}")
@@ -649,27 +789,48 @@ def run(args) -> dict:
     result["sun_zenith_centre"] = round(sza, 1)
     log(f"Solar zenith angle at bbox centre ({clon:g}, {clat:g}): {sza:.1f} deg")
     if sza >= 90:
-        result["status"] = "skipped_night"
-        annotate("notice", f"Skipped: sun is below the horizon at the bbox centre for scan "
-                 f"{result['scan_utc_iso']} ({result['scan_sgt_iso']}), solar zenith {sza:.1f} deg. "
-                 "These RGB products are daytime only.")
-        return result
-    corners = [solar_zenith(scan, lon, lat) for lon, lat in ((bbox[0], bbox[1]), (bbox[2], bbox[3]))]
-    if max(corners) >= 90:
-        annotate("warning", f"Sun is below the horizon at part of the bbox "
-                 f"(SW/NE corner zenith {corners[0]:.0f}/{corners[1]:.0f} deg): that part will be dark.")
+        # Night: only products that work in the dark (IR Enhanced) still run; the rest are skipped.
+        skipped = [p for p in products if not PRODUCTS[p].get("night_ok")]
+        products = [p for p in products if p not in skipped]
+        when = f"scan {result['scan_utc_iso']} ({result['scan_sgt_iso']}), solar zenith {sza:.1f} deg"
+        if not products:
+            result["status"] = "skipped_night"
+            annotate("notice", f"Skipped: sun is below the horizon at the bbox centre for {when}. "
+                     "These RGB products are daytime only.")
+            return result
+        if skipped:
+            result["skipped_products"] = skipped
+            annotate("notice", f"Night at the bbox centre ({when}): skipped {', '.join(skipped)} (daytime only); "
+                     f"making {', '.join(products)}.")
+        result["products"] = products
+    else:
+        corners = [solar_zenith(scan, lon, lat) for lon, lat in ((bbox[0], bbox[1]), (bbox[2], bbox[3]))]
+        if max(corners) >= 90:
+            annotate("warning", f"Sun is below the horizon at part of the bbox "
+                     f"(SW/NE corner zenith {corners[0]:.0f}/{corners[1]:.0f} deg): that part will be dark"
+                     + (" (IR Enhanced shows it as infrared)." if "ir_enhanced" in products else "."))
 
     # Low-sun warning: the picture is dim and noisy wherever the sun is low, even if it is above the horizon.
-    zen_w, zen_e = solar_zenith(scan, bbox[0], clat), solar_zenith(scan, bbox[2], clat)
-    worst = max(zen_w, sza, zen_e)
+    # It concerns the products that use reflected sunlight alone (not IR Enhanced, which fades to IR there).
     low_sun_note = None
-    if worst > args.low_sun_zenith:
-        side = "west" if worst == zen_w else "east" if worst == zen_e else "centre"
-        result["low_sun"] = (f"sun zenith {zen_w:.0f}/{sza:.0f}/{zen_e:.0f} deg (west/centre/east), above "
-                             f"{args.low_sun_zenith:g}: the {side} side is dim or over-corrected and noisy")
-        annotate("warning", "Low sun: " + result["low_sun"] + ". Consider a scan nearer local noon.")
-        low_sun_note = (f"LOW SUN: zenith {worst:.0f}\N{DEGREE SIGN} on the {side} side - unreliable brightness there",
-                        (255, 190, 60, 255))
+    if sza < 90 and any(not PRODUCTS[p].get("ir") for p in products):
+        zen_w, zen_e = solar_zenith(scan, bbox[0], clat), solar_zenith(scan, bbox[2], clat)
+        worst = max(zen_w, sza, zen_e)
+        if worst > args.low_sun_zenith:
+            side = "west" if worst == zen_w else "east" if worst == zen_e else "centre"
+            result["low_sun"] = (f"sun zenith {zen_w:.0f}/{sza:.0f}/{zen_e:.0f} deg (west/centre/east), above "
+                                 f"{args.low_sun_zenith:g}: the {side} side is dim or over-corrected and noisy")
+            annotate("warning", "Low sun: " + result["low_sun"] + ". Consider a scan nearer local noon.")
+            low_sun_note = (f"LOW SUN: zenith {worst:.0f}\N{DEGREE SIGN} on the {side} side - unreliable brightness there",
+                            (255, 190, 60, 255))
+
+    # Only the bands the remaining products need: at night IR Enhanced is B13 alone, unless part of the box is sunlit.
+    sunlit = sza < 90 or any_sunlit(scan, bbox)
+    needed = {b for p in products for b in PRODUCTS[p]["bands"] if sunlit or not PRODUCTS[p].get("night_ok")}
+    needed |= {b for p in products for b in PRODUCTS[p].get("extra_bands", ())}
+    needed |= {cue[0] for p in products if (cue := cloud_cue_for(PRODUCTS[p], args))}
+    keys = {k: v for k, v in keys.items() if k[0] in needed}
+    result["bands"] = sorted(needed)
 
     if args.check_only:
         result["status"] = "check_only"
@@ -709,19 +870,38 @@ def run(args) -> dict:
                 + (f", Rayleigh {'on' if use_rayleigh else 'off'}" if prod["rayleigh"] else ""))
             cue = cloud_cue_for(prod, args)
             sun = (scan, prod["sun_correction"]["limit"]) if prod.get("sun_correction") and args.sun_correction else None
-            rgb = make_rgb(files, bbox, args.resolution, prod, gammas, use_rayleigh, cue, sun)
-            notes = []
+            notes, recipe_line, legend, day_frac = [], None, None, None
+            if prod.get("ir"):
+                _, width, height = target_area(bbox, args.resolution)
+                zen = zenith_grid(scan, bbox, args.resolution, width, height)
+                tc = make_rgb(files, bbox, args.resolution, prod, gammas, use_rayleigh) if sunlit else None
+                rgb, day_frac = make_ir_enhanced(tc, make_bt(files, bbox, args.resolution, "B13"), zen)
+                legend = ir_legend()
+                if day_frac <= 0.005:
+                    recipe_line = "IR Enhanced: B13 10.4 um only (night)"
+                    notes.append("Night: warm surfaces in grey, cold cloud in colour")
+                else:
+                    recipe_line = (f"IR Enhanced: True Color (gamma {gamma_text(gammas)}, "
+                                   f"Rayleigh {'on' if use_rayleigh else 'off'}) + B13 10.4 um")
+                    notes.append(f"Cold cloud over True Color: clear at {ir_scale.WARM_C} C, "
+                                 f"{ir_scale.DAY_ALPHA:.0%} opaque from {ir_scale.DAY_FULL_C:.0f} C")
+                    if day_frac < 0.995:
+                        notes.append(f"{day_frac:.0%} of the area sunlit; the rest is grey IR with opaque colour")
+                log(f"  IR Enhanced: {day_frac:.1%} of the area sunlit")
+            else:
+                rgb = make_rgb(files, bbox, args.resolution, prod, gammas, use_rayleigh, cue, sun)
             if cue:
                 notes.append(f"Cold cloud ({cue[0]} < {cue[1]:g} K) shown grey; smoke and warm cloud keep their colour")
             if sun:
                 refl = "/".join(c[0] for c in prod["channels"] if c[1] == _REFL)
                 notes.append(f"{refl} divided by cos(sun zenith), capped at {sun[1]:g}\N{DEGREE SIGN}")
-            if low_sun_note:
+            if low_sun_note and not prod.get("ir"):
                 notes.append(low_sun_note)
             out = Path(args.outdir) / prod["subdir"] / f"{scan:%Y%m%d_%H%M}.png"
             try:
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution,
-                                 coast_width, wind, args.wind_spacing, notes, args.caption_corner, grid_step)
+                                 coast_width, wind, args.wind_spacing, notes, args.caption_corner, grid_step,
+                                 recipe_line, legend)
             except Exception as exc:  # noqa: BLE001
                 if wind is None:
                     raise
@@ -730,11 +910,12 @@ def run(args) -> dict:
                          "publishing without them.")
                 wind = None  # later products skip them too
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution, coast_width,
-                                 None, args.wind_spacing, notes, args.caption_corner, grid_step)
+                                 None, args.wind_spacing, notes, args.caption_corner, grid_step, recipe_line, legend)
             result["outputs"].append({
                 "product": name, "label": prod["label"], "png": str(out), "subdir": prod["subdir"],
                 "size_px": [int(rgb.shape[1]), int(rgb.shape[0])], "gamma": gamma_text(gammas),
                 "rayleigh": use_rayleigh,
+                **({"sunlit_fraction": round(day_frac, 3)} if day_frac is not None else {}),
             })
             log(f"Wrote {out} ({out.stat().st_size / 1e6:.1f} MB, {rgb.shape[1]}x{rgb.shape[0]})")
     finally:

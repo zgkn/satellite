@@ -1,22 +1,23 @@
 # satellite
 
-## Himawari-9 RGB: True Color and Day Fire (Sumatra, Malay Peninsula, Singapore, Borneo)
+## Himawari-9 RGB: True Color, IR Enhanced and Day Fire (Sumatra, Malay Peninsula, Singapore, Borneo)
 
 A GitHub Actions workflow builds RGB images from Himawari-9 AHI full-disk data in the public NOAA NODD bucket
 (`s3://noaa-himawari9/AHI-L1b-FLDK/`, anonymous access, no AWS account needed). Each channel is scaled between a
 minimum and maximum (reflectance 0-100 %, or brightness temperature for the thermal band), clipped to 0-1, then
 raised to `1/gamma`. The images are built by hand with Satpy, not with its built-in composites (which add extra
-corrections). Daytime only.
+corrections). True Color and Day Fire are daytime only; IR Enhanced also runs at night.
 
 | Product | R | G | B | Gamma (R/G/B) | Recipe | Use |
 |---|---|---|---|---|---|---|
 | `true_color` | B03 0.64 µm | B02 0.51 µm | B01 0.47 µm | 1.7 | JMA | Natural-looking picture |
+| `ir_enhanced` | True Color + B13 10.4 µm IR overlay | | | 1.7 (True Color part) | JMA True Color + CIMSS Clean IR Window colours | Convection / cold cloud tops, day and night |
 | `day_fire` | B07 3.9 µm (27-60 °C) | B04 0.86 µm | B03 0.64 µm | 0.4 / 1 / 1 | NOAA/CIRA (VIIRS Day Fire RGB, on AHI bands; red minimum raised from 0 to 27 °C for the tropics; cold cloud shown grey) | Thermal hotspots |
 
 ### How to run it
 
 **GitHub web / mobile app:** open the repo → **Actions** → **Himawari RGB** → **Run workflow**. Every input has a
-default, so you can just tap *Run workflow*. It takes about 3-4 minutes for both products.
+default, so you can just tap *Run workflow*. It takes about 3-5 minutes for all products.
 
 **Where the results go**
 
@@ -28,6 +29,7 @@ default, so you can just tap *Run workflow*. It takes about 3-4 minutes for both
   - True Color: `YYYYMMDD_HHMM.png` and `latest.png` at the top level, e.g.
     `https://github.com/<owner>/satellite/blob/himawari-output/latest.png` (works in the mobile app).
   - Day Fire: the same names inside `dayfire/`, e.g. `.../blob/himawari-output/dayfire/latest.png`.
+  - IR Enhanced: the same names inside `ir/`, e.g. `.../blob/himawari-output/ir/latest.png`.
 - The job summary shows the scan time, the image paths and links.
 
 ### Website (GitHub Pages)
@@ -44,22 +46,46 @@ to redeploy). Note that Pages sites are public, and on a private repository Page
 | Input | Default | Meaning |
 |---|---|---|
 | `datetime_utc` | blank | Scan time **in UTC**, `YYYYMMDDHHMM`, minute ending in 0 (scans are every 10 min). Blank = newest complete scan from the last ~3 h. Examples: 08:00 SGT = `0000` UTC, 10:00 SGT = `0200` UTC, so `202610210200`. |
-| `product` | `all` | `true_color`, `day_fire` or `all`. With both, the shared file (B03) and the winds are fetched once. |
+| `product` | `all` | `true_color`, `ir_enhanced`, `day_fire` or `all`. With several, shared files (B03, B13) and the winds are fetched once. At night (sun below the horizon at the bbox centre) only `ir_enhanced` is made; the others are skipped with a notice. |
 | `bbox` | `94.5,-6.5,119.5,7.5` | `west,south,east,north` in degrees. Default covers Sumatra, Peninsular Malaysia, Singapore and Borneo. A smaller box gives a smaller image at the same pixel size; add a finer `resolution` (e.g. `0.005`) to enlarge a fire area. B07 itself only has 2 km pixels. |
 | `gamma` | blank | True Color gamma override. Blank = 1.7, as in the JMA guide. Try `2.0` for hazy scenes. `day_fire` ignores it (its recipe has different gammas per channel). |
 | `segments` | `5-6` | Full-disk segments to download (1 = north … 10 = south). 5-6 cover roughly 10°N-10°S. |
 | `resolution` | `0.01` | Output pixel size in degrees (0.01° ≈ 1 km, giving about 2500 × 1400 px for the default bbox). |
-| `winds` | **on** | Overlay thin orange streamlines of ECMWF IFS 925 hPa wind (see below). If the ECMWF data cannot be fetched the run still publishes the images, without winds, and prints a warning. Locally: `--no-winds`, `--wind-level` (hPa), `--wind-spacing` (px). |
+| `winds` | **on** | Overlay thin streamlines (orange; white on IR Enhanced, where orange is lost against the red/yellow cloud colours) of ECMWF IFS 925 hPa wind (see below). If the ECMWF data cannot be fetched the run still publishes the images, without winds, and prints a warning. Locally: `--no-winds`, `--wind-level` (hPa), `--wind-spacing` (px). |
 | `coastlines` | **on** | Draw coastlines from Natural Earth 1:10m (public domain, stored in `data/ne_10m_coastline.zip`) at 1.5 px width: green on True Color, magenta on Day Fire (green would be confused with the vegetation colour). Untick for clean images. Locally: `--no-coastlines`, `--coast-width`. |
 | `graticule` | **on** | Faint, labelled lat/lon lines every 5° (labels on the top and left edges, clear of the caption), drawn under the winds and coastlines. Untick for a clean image. Locally: `--no-graticule`, `--grid-step` (degrees). The strength is the constant `GRATICULE_LINE_ALPHA` in the script. |
 | `cloud_cue` | **on** | **Day Fire only.** Show cold cloud (10.4 µm below ~290 K) in grey so it stands apart from smoke (see Day Fire). Locally: `--no-cloud-cue`, `--cloud-bt`. |
 | `sun_correction` | **on** | **Day Fire only.** Divide the 0.86 and 0.64 µm channels by cos(sun zenith), capped at 80°, so brightness does not follow the sun (see Day Fire). Locally: `--no-sun-correction`. |
-| `rayleigh` | **on** | **True Color only.** Apply Satpy's Rayleigh correction, which removes the blue atmospheric haze. It also applies the sun-zenith correction the modifier requires. Untick it for the plain JMA recipe, which is a bit faster. The first run downloads look-up tables; later runs reuse the cache. Day Fire never uses it. |
+| `rayleigh` | **on** | **True Color and the True Color base of IR Enhanced.** Apply Satpy's Rayleigh correction, which removes the blue atmospheric haze. It also applies the sun-zenith correction the modifier requires. Untick it for the plain JMA recipe, which is a bit faster. The first run downloads look-up tables; later runs reuse the cache. Day Fire never uses it. |
 
 Scan times are always UTC. Himawari data appear in the bucket roughly 20-30 min after the scan. The **0240 and 1440
 UTC** full-disk scans are missing from the bucket every day (10:40 and 22:40 SGT; presumably satellite housekeeping),
 so asking for those exact times fails with a "no files found" message; use the scan before or after. A blank
 `datetime_utc` handles this automatically by walking back to the newest complete scan.
+
+### IR Enhanced
+
+Day: the True Color picture with a **translucent colour overlay of the 10.4 µm infrared band (B13)**; night: infrared only.
+Colours follow the CIMSS/SSEC GOES-16 *Clean IR Window* (10.3 µm) enhancement (sampled from its colour bar, stored in
+`scripts/ir_scale.py`): cyan and blue at -20 to -34 °C, green about -40, yellow -50, orange to red -52 to -66, dark red/black
+-70, a grey/white band to -80, then pink, purple and a yellow end cap at -92 °C. The legend is a colour bar at the bottom
+of the caption box.
+
+- **Daylight:** the overlay is invisible at -20 °C and warmer, and ramps to **70 % opaque from -40 °C and colder**
+  (`DAY_ALPHA`, `DAY_FULL_C` in `ir_scale.py`), so thin or low cloud leaves True Color untouched while convective tops
+  stand out and the surface still shows through.
+- **Darkness:** the base is a grey IR ramp (black about +47 °C, light grey at -20 °C) and everything colder than -20 °C is
+  opaque colour. The +47 °C black point is an estimate: the reference image does not say where its grey ramp starts.
+- **Sunrise and sunset:** the two looks are blended **per pixel by sun angle** (fully day at 75°, fully night at 90°
+  zenith), so the terminator fades instead of showing a seam. The caption gives the sunlit share of the area when it
+  is partial.
+- **Night behaviour:** the existing night check (sun below the horizon at the bbox centre) skips True Color and Day Fire
+  as before, but IR Enhanced still runs, downloading only B13 (2 files) unless some part of the box is sunlit. With
+  `product: all` at night you get just the IR image plus a notice and a "Night" line in the job summary; if only
+  True Color or Day Fire is selected the run is skipped as before.
+- **Details:** B13 has 2 km pixels, so it is lightly Gaussian-smoothed (sigma 0.9 px) on the 1 km grid. True Color uses
+  the same Rayleigh setting and gamma as the True Color product. Streamlines are white and coastlines green.
+  The green coastline can be confused with the green of the -40 °C band; switch coastlines off for a clean look.
 
 ### Day Fire
 
@@ -150,12 +176,13 @@ u, v and surface-pressure messages are fetched with byte-range requests, ~2 MB p
 ### What it checks
 
 1. Lists the bucket first and fails with a clear message naming any missing band/segment (the bands of the chosen
-   products × the requested segments: 6 files for True Color, 8 for Day Fire including the cloud-cue band, 12 for
-   both). With a blank time it walks back from now and picks the newest scan in which all of those files exist.
+   products × the requested segments: 6 files for True Color, 8 for Day Fire including the cloud-cue band, 8 for IR Enhanced, 12 for
+   all). With a blank time it walks back from now and picks the newest scan in which all of those files exist.
 2. Checks that the bbox lies inside the requested segments and, if not, fails telling you which segments are needed
    (e.g. a bbox reaching 15°N needs `4-6`) instead of producing a cropped or blank image.
-3. Night check: if the sun is below the horizon at the bbox centre (`pyorbital` solar zenith ≥ 90°), the run is
-   skipped with a notice (job stays green, no image). Near sunrise/sunset the east or west edge of the bbox can still be
+3. Night check: if the sun is below the horizon at the bbox centre (`pyorbital` solar zenith ≥ 90°), True Color and
+   Day Fire are skipped with a notice (job stays green); IR Enhanced still runs, and if it is the only product
+   requested nothing is skipped. If nothing at all is left the run ends with a notice and no image. Near sunrise/sunset the east or west edge of the bbox can still be
    dark; a warning is printed then. Borneo and Sumatra are ~1.7 h of local time apart. A separate low-sun warning
    (zenith above 65° anywhere along the centre line) is described under Day Fire.
 

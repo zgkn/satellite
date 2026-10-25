@@ -172,8 +172,8 @@ def fetch_winds(s3, scan: dt.datetime, level: int, bbox, margin: float = 1.0) ->
 
 
 # --------------------------------------------------------------------------- drawing
-def draw_streamlines(img, wind: WindField, bbox, resolution: float, spacing_px: float = 45.0):
-    """Composite thin orange streamlines for ``wind`` onto the RGBA lat/lon image ``img``."""
+def draw_streamlines(img, wind: WindField, bbox, resolution: float, spacing_px: float = 45.0, line_rgb=None):
+    """Composite thin streamlines for ``wind`` (orange, or ``line_rgb``) onto the RGBA lat/lon image ``img``."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -204,7 +204,7 @@ def draw_streamlines(img, wind: WindField, bbox, resolution: float, spacing_px: 
         ax.patch.set_alpha(0)
         ax.set_xlim(x0, x1)
         ax.set_ylim(y0, y1)
-        for rgb, extra, alpha in ((CASING_RGB, 1.0, 0.30), (LINE_RGB, 0.0, 0.92)):
+        for rgb, extra, alpha in ((CASING_RGB, 1.0, 0.30), (line_rgb or LINE_RGB, 0.0, 0.92)):
             sset = ax.streamplot(
                 wind.lon, wind.lat, u, v, density=density, color=tuple(c / 255 for c in rgb),
                 linewidth=linewidth + extra, arrowsize=1.9, maxlength=MAX_LENGTH, broken_streamlines=True,

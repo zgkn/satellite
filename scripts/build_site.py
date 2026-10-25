@@ -2,7 +2,7 @@
 """Generate a small static site (index.html + thumbnails) from directories of Himawari PNGs.
 
 Each product has a directory holding ``YYYYMMDD_HHMM.png`` files (UTC scan times) plus
-``latest.png``: True Color in the root, Day Fire in ``dayfire/``.  Used by the Himawari
+``latest.png``: True Color in the root, Day Fire in ``dayfire/``, IR Enhanced in ``ir/``.  Used by the Himawari
 workflow on the ``himawari-output`` branch, which is served by GitHub Pages, but it works
 on any such directory:
 
@@ -14,9 +14,13 @@ import argparse
 import datetime as dt
 import html
 import re
+import sys
 from pathlib import Path
 
 from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ir_scale  # noqa: E402
 
 NAME_RE = re.compile(r"^(\d{8})_(\d{4})\.png$")
 SGT = dt.timezone(dt.timedelta(hours=8))
@@ -39,6 +43,18 @@ SECTIONS = (
         key="truecolor", title="True Color", subdir="",
         blurb="JMA True Color RGB (R&nbsp;B03, G&nbsp;B02, B&nbsp;B01), Rayleigh-corrected, gamma 1.7.",
         key_items=None, note=None,
+    ),
+    dict(
+        key="ir", title="IR Enhanced", subdir="ir",
+        blurb="True Color with a translucent colour overlay of the 10.4&nbsp;&micro;m infrared band (B13) by day; "
+              "infrared only at night. Runs day and night.",
+        key_items=None, gradient=True,
+        note="Colours follow the CIMSS/SSEC GOES Clean IR Window enhancement, applied to brightness temperature. "
+             "By day the overlay is clear at &minus;20&nbsp;&deg;C and 70&nbsp;% opaque from &minus;40&nbsp;&deg;C and colder, "
+             "so the surface stays visible under cloud. Where the sun is down, warm surfaces are grey (black is "
+             "about +47&nbsp;&deg;C, an estimate) and everything colder than &minus;20&nbsp;&deg;C is opaque colour. "
+             "The two blend by sun angle, so dawn and dusk fade smoothly. The infrared band has 2&nbsp;km pixels "
+             "(lightly smoothed here). Cold cloud tops are high, thick, usually convective cloud.",
     ),
     dict(
         key="dayfire", title="Day Fire", subdir="dayfire",
@@ -89,7 +105,7 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Himawari-9 RGB</title>
-<meta name="description" content="Latest Himawari-9 True Color and Day Fire RGB of Sumatra, the Malay Peninsula, Singapore and Borneo.">
+<meta name="description" content="Latest Himawari-9 True Color, IR Enhanced and Day Fire images of Sumatra, the Malay Peninsula, Singapore and Borneo.">
 <style>
 :root {{ --bg:#f6f7f9; --fg:#14181f; --muted:#5b6573; --card:#fff; --line:#dfe3e8; --accent:#0b63ce; }}
 @media (prefers-color-scheme: dark) {{
@@ -116,6 +132,11 @@ ul.key {{ list-style:none; display:flex; flex-wrap:wrap; gap:6px 16px; margin:12
 ul.key li {{ display:flex; align-items:center; gap:6px; font-size:.9rem; }}
 ul.key i {{ width:16px; height:16px; border-radius:3px; border:1px solid var(--line); display:inline-block; }}
 p.note {{ margin:4px 0 0; color:var(--muted); font-size:.85rem; }}
+.scale {{ margin:12px 14px 4px; max-width:640px; }}
+.scale div.bar {{ height:14px; border-radius:3px; border:1px solid var(--line); }}
+.scale div.ticks {{ position:relative; height:1.2em; font-size:.75rem; color:var(--muted); margin-top:2px; }}
+.scale div.ticks span {{ position:absolute; transform:translateX(-50%); }}
+.scale p {{ margin:0 0 4px; font-size:.85rem; color:var(--muted); }}
 .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }}
 .grid a {{ text-decoration:none; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; display:block; }}
 .grid a:hover, .grid a:focus-visible {{ border-color:var(--accent); }}
@@ -127,12 +148,12 @@ footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 <body>
 <main>
 <h1>Himawari-9 RGB</h1>
-<p class="sub">Sumatra, Malay Peninsula, Singapore and Borneo &middot; JMA and NOAA/CIRA RGB recipes &middot; daytime scans only</p>
+<p class="sub">Sumatra, Malay Peninsula, Singapore and Borneo &middot; JMA and NOAA/CIRA RGB recipes plus a 10.4&nbsp;&micro;m infrared product &middot; True Color and Day Fire are daytime only, IR Enhanced runs day and night</p>
 {nav}
 {body}
 <footer>
   Data: Himawari-9 AHI, JMA / NOAA NODD (<code>s3://noaa-himawari9</code>); recipes: JMA MSC Himawari True Color RGB Quick Guide,
-  NOAA/CIRA VIIRS Day Fire RGB Quick Guide;
+  NOAA/CIRA VIIRS Day Fire RGB Quick Guide; IR colour scale after the CIMSS/SSEC GOES Clean IR Window enhancement;
   coastlines: Natural Earth; wind streamlines: ECMWF open data (CC-BY-4.0).
   Scan times are UTC; SGT = UTC+8. Page updated {built} UTC.
 </footer>
@@ -153,6 +174,13 @@ def section_html(sec: dict, folder: Path, names: list[str]) -> str:
         items = "".join(f'<li><i style="background:{c}"></i>{t}</li>' for c, t in sec["key_items"])
         key = f'<ul class="key">{items}</ul>'
     note = f'<p class="note">{sec["note"]}</p>' if sec["note"] else ""
+    if sec.get("gradient"):
+        span = ir_scale.WARM_C - ir_scale.COLD_C
+        ticks = "".join(f'<span style="left:{(ir_scale.WARM_C - t) / span * 100:.1f}%">{t}</span>'
+                        for t in ir_scale.LEGEND_TICKS_C)
+        key = (f'<div class="scale"><p>Cloud-top temperature, 10.4&nbsp;&micro;m (&deg;C); warmer than '
+               f'&minus;20&nbsp;&deg;C is grey</p><div class="bar" style="background:{ir_scale.css_gradient()}"></div>'
+               f'<div class="ticks">{ticks}</div></div>')
 
     cards = []
     for n in names:

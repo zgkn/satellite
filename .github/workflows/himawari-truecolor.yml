@@ -1,7 +1,8 @@
 name: Himawari RGB
 
 # Manual only (also runnable from the GitHub mobile app). No schedule on purpose.
-# Builds True Color (JMA recipe) and/or Day Fire (NOAA/CIRA recipe) RGB from the public NOAA NODD bucket.
+# Builds True Color (JMA recipe), Day Fire (NOAA/CIRA recipe) and/or IR Enhanced (True Color + 10.4 um IR; also runs
+# at night, when it is IR only) from the public NOAA NODD bucket.
 on:
   workflow_dispatch:
     inputs:
@@ -11,13 +12,14 @@ on:
         default: ""
         type: string
       product:
-        description: "Which image(s): all, true_color or day_fire (3.9 um hotspots)"
+        description: "Which image(s): all, true_color, ir_enhanced (True Color + IR; day and night) or day_fire (3.9 um hotspots). At night only ir_enhanced is made"
         required: false
         default: all
         type: choice
         options:
           - all
           - true_color
+          - ir_enhanced
           - day_fire
       bbox:
         description: "Region west,south,east,north in degrees (default: Sumatra, Malay Peninsula, Singapore, Borneo)"
@@ -40,7 +42,7 @@ on:
         default: "0.01"
         type: string
       winds:
-        description: "Overlay ECMWF 925 hPa wind streamlines (orange). If ECMWF data fail the images are still published without them"
+        description: "Overlay ECMWF 925 hPa wind streamlines (orange; white on IR Enhanced). If ECMWF data fail the images are still published without them"
         required: false
         default: true
         type: boolean
@@ -65,7 +67,7 @@ on:
         default: true
         type: boolean
       rayleigh:
-        description: "True color only: apply Rayleigh correction (on by default; untick for the plain JMA recipe, a bit faster)"
+        description: "True color (and the True Color base of IR Enhanced): apply Rayleigh correction (on by default; untick for the plain JMA recipe, a bit faster)"
         required: false
         default: true
         type: boolean
@@ -104,7 +106,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Cache pyspectral data (Rayleigh LUTs)
-        if: ${{ inputs.rayleigh && (inputs.product == 'all' || inputs.product == 'true_color') }}
+        if: ${{ inputs.rayleigh && inputs.product != 'day_fire' }}
         uses: actions/cache@v4
         with:
           path: .pyspectral-data
@@ -163,6 +165,7 @@ jobs:
           path: |
             output/*.png
             output/dayfire/*.png
+            output/ir/*.png
           if-no-files-found: error
           retention-days: 30
 
@@ -230,6 +233,7 @@ jobs:
                 echo "**Segments:** $(jq -r '.segments | map(tostring) | join(",")' $r), bands $(jq -r '.bands | join("/")' $r) (all files present)  "
                 echo "**Winds:** $(jq -r '.winds // "n/a"' $r)  "
                 if [ -n "$(jq -r '.low_sun // empty' $r)" ]; then echo "**:warning: Low sun:** $(jq -r .low_sun $r)"; fi
+                if [ -n "$(jq -r '.skipped_products // empty | join(", ")' $r)" ]; then echo "**Night:** skipped $(jq -r '.skipped_products | join(", ")' $r) (daytime only); only the products below were made.  "; fi
                 echo
                 while IFS='|' read -r label png sub size; do
                   name=$(basename "$png"); path="${sub:+$sub/}"
@@ -241,7 +245,7 @@ jobs:
                 ;;
               skipped_night)
                 echo "**Skipped (night):** scan $(jq -r .scan_utc_iso $r) / $(jq -r .scan_sgt_iso $r)," \
-                     "sun zenith $(jq -r .sun_zenith_centre $r)° at the bbox centre. These RGB products are daytime only; no image made."
+                     "sun zenith $(jq -r .sun_zenith_centre $r)° at the bbox centre. These RGB products are daytime only; no image made (IR Enhanced would still run at night)."
                 ;;
               *)
                 echo "**Failed.** $(jq -r '.message // "see the log"' $r 2>/dev/null || echo "see the log")"

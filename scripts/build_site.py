@@ -2,7 +2,8 @@
 """Generate a small static site (index.html + thumbnails) from directories of Himawari PNGs.
 
 Each product has a directory holding ``YYYYMMDD_HHMM.png`` files (UTC scan times) plus
-``latest.png``: True Color in the root, Day Fire in ``dayfire/``, IR Enhanced in ``ir/``.  Used by the Himawari
+``latest.png``: True Color in the root, Day Fire in ``dayfire/``, IR Enhanced in ``ir/``; the same
+three inside a region folder (``mekong/``) for each further region, shown as tabs on the page.  Used by the Himawari
 workflow on the ``himawari-output`` branch, which is served by GitHub Pages, but it works
 on any such directory:
 
@@ -36,6 +37,15 @@ DAY_FIRE_KEY = (
     ("#2f8f3f", "Healthy vegetation"),
     ("#6b4a2b", "Bare ground / old burn scar / urban"),
     ("#050505", "Water"),
+)
+
+# One tab per region; ``dir`` is its folder on the branch ("" = the root, which keeps the original links and
+# section ids). A region with no images yet gets no tab.
+REGION_TABS = (
+    dict(key="sumatra", title="Sumatra &amp; Borneo", dir="",
+         sub="Sumatra, Malay Peninsula, Singapore and Borneo"),
+    dict(key="mekong", title="Mekong", dir="mekong",
+         sub="Mekong sub-region: Myanmar, Thailand, Laos, Cambodia, Vietnam and Yunnan"),
 )
 
 SECTIONS = (
@@ -140,7 +150,13 @@ p.note {{ margin:4px 0 0; color:var(--muted); font-size:.85rem; }}
 .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }}
 .grid a {{ text-decoration:none; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; display:block; }}
 .grid a:hover, .grid a:focus-visible {{ border-color:var(--accent); }}
-.grid img {{ display:block; width:100%; height:auto; aspect-ratio:25/14; object-fit:cover; background:#000; }}
+.grid img {{ display:block; width:100%; height:auto; object-fit:cover; background:#000; }}
+.hero img {{ max-height:88vh; object-fit:contain; }}
+.tabs {{ display:flex; gap:8px; margin:0 0 16px; }}
+.tabs button {{ font:inherit; padding:8px 18px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); cursor:pointer; }}
+.tabs button[aria-selected="true"] {{ background:var(--accent); border-color:var(--accent); color:#fff; }}
+.js section.region:not(.active) {{ display:none; }}
+section.region + section.region {{ margin-top:40px; border-top:1px solid var(--line); padding-top:8px; }}
 .grid small {{ display:block; padding:6px 8px; color:var(--muted); font-size:.78rem; line-height:1.3; }}
 footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 </style>
@@ -148,8 +164,8 @@ footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 <body>
 <main>
 <h1>Himawari-9 RGB</h1>
-<p class="sub">Sumatra, Malay Peninsula, Singapore and Borneo &middot; JMA and NOAA/CIRA RGB recipes plus a 10.4&nbsp;&micro;m infrared product &middot; True Color and Day Fire are daytime only, IR Enhanced runs day and night</p>
-{nav}
+<p class="sub">JMA and NOAA/CIRA RGB recipes plus a 10.4&nbsp;&micro;m infrared product &middot; True Color and Day Fire are daytime only, IR Enhanced runs day and night</p>
+{tabs}
 {body}
 <footer>
   Data: Himawari-9 AHI, JMA / NOAA NODD (<code>s3://noaa-himawari9</code>); recipes: JMA MSC Himawari True Color RGB Quick Guide,
@@ -158,14 +174,40 @@ footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
   Scan times are UTC; SGT = UTC+8. Page updated {built} UTC.
 </footer>
 </main>
+<script>
+(function () {{
+  var regions = document.querySelectorAll("section.region");
+  if (regions.length < 2) return;
+  document.documentElement.className += " js";
+  var tabs = document.querySelectorAll(".tabs button");
+  function show(key, keepHash) {{
+    var found = false;
+    regions.forEach(function (r) {{ if (r.dataset.region === key) found = true; }});
+    if (!found) key = regions[0].dataset.region;
+    regions.forEach(function (r) {{ r.classList.toggle("active", r.dataset.region === key); }});
+    tabs.forEach(function (b) {{ b.setAttribute("aria-selected", b.dataset.region === key ? "true" : "false"); }});
+    try {{ localStorage.setItem("himawari-region", key); }} catch (e) {{}}
+    if (!keepHash) history.replaceState(null, "", "#" + key);
+  }}
+  tabs.forEach(function (b) {{ b.addEventListener("click", function () {{ show(b.dataset.region); }}); }});
+  var start = null, hash = location.hash.slice(1);
+  regions.forEach(function (r) {{
+    if (r.dataset.region === hash || r.querySelector('[id="' + hash + '"]')) start = r.dataset.region;
+  }});
+  if (!start) {{ try {{ start = localStorage.getItem("himawari-region"); }} catch (e) {{}} }}
+  show(start || regions[0].dataset.region, true);
+}})();
+</script>
 </body>
 </html>
 """
 
 
-def section_html(sec: dict, folder: Path, names: list[str]) -> str:
-    prefix = f"{sec['subdir']}/" if sec["subdir"] else ""
+def section_html(sec: dict, folder: Path, names: list[str], rel: str, sec_id: str) -> str:
+    prefix = f"{rel}/" if rel else ""
     newest = names[0]
+    with Image.open(folder / newest) as im:
+        width, height = im.size
     utc, sgt = fmt(scan_time(newest))
     latest = f"{prefix}{newest}?v={newest[:-4]}"  # cache-busting: the file name changes with each scan
 
@@ -186,18 +228,18 @@ def section_html(sec: dict, folder: Path, names: list[str]) -> str:
     for n in names:
         u, s = fmt(scan_time(n))
         cards.append(
-            f'<a href="{prefix}{n}"><img src="{prefix}thumbs/{n[:-4]}.jpg" alt="" loading="lazy">'
+            f'<a href="{prefix}{n}"><img src="{prefix}thumbs/{n[:-4]}.jpg" alt="" loading="lazy" style="aspect-ratio:{width}/{height}">'
             f"<small>{html.escape(s)}<br>{html.escape(u)}</small></a>"
         )
     gallery = (
         f'<h3>Recent scans ({len(names)})</h3>\n<div class="grid">\n' + "\n".join(cards) + "\n</div>"
         if len(names) > 1 else ""
     )
-    return f"""<section class="product" id="{sec['key']}">
+    return f"""<section class="product" id="{sec_id}">
 <h2>{sec['title']}</h2>
 <p class="blurb">{sec['blurb']}</p>
 <div class="hero">
-  <a href="{latest}"><img src="{latest}" alt="Himawari-9 {sec['title']}, {utc}" width="2500" height="1400"></a>
+  <a href="{latest}"><img src="{latest}" alt="Himawari-9 {sec['title']}, {utc}" width="{width}" height="{height}"></a>
   <div class="meta">
     <div><strong>{sgt}</strong><br><span>{utc}</span></div>
     <div><a href="{latest}" download>Download PNG</a> &middot; <a href="{latest}">Open full size</a></div>
@@ -209,29 +251,43 @@ def section_html(sec: dict, folder: Path, names: list[str]) -> str:
 
 
 def build(root: Path) -> None:
-    sections, parts = [], []
-    for sec in SECTIONS:
-        folder = root / sec["subdir"] if sec["subdir"] else root
-        names = sorted((p.name for p in folder.glob("*.png") if NAME_RE.match(p.name)), reverse=True) \
-            if folder.is_dir() else []
-        if not names:
-            continue
-        make_thumbs(folder, names)
-        sections.append((sec, names))
-        parts.append(section_html(sec, folder, names))
-    if not parts:
+    regions, summary = [], []
+    for reg in REGION_TABS:
+        sections, parts = [], []
+        for sec in SECTIONS:
+            rel = "/".join(p for p in (reg["dir"], sec["subdir"]) if p)
+            folder = root / rel if rel else root
+            names = sorted((p.name for p in folder.glob("*.png") if NAME_RE.match(p.name)), reverse=True) \
+                if folder.is_dir() else []
+            if not names:
+                continue
+            make_thumbs(folder, names)
+            sections.append((sec, names))
+            # the first region keeps the original section ids (#truecolor ...), the others are prefixed
+            sec_id = sec["key"] if not reg["dir"] else f"{reg['key']}-{sec['key']}"
+            parts.append(section_html(sec, folder, names, rel, sec_id))
+            summary.append(f"{reg['key']} {sec['title']}: {len(names)} scans (newest {names[0][:-4]})")
+        if parts:
+            nav = ""
+            if len(sections) > 1:
+                ids = [s_["key"] if not reg["dir"] else f"{reg['key']}-{s_['key']}" for s_, _ in sections]
+                nav = "<nav>" + "".join(f'<a href="#{i}">{s_["title"]}</a>' for i, (s_, _) in zip(ids, sections)) + "</nav>"
+            regions.append((reg, f'<section class="region" data-region="{reg["key"]}">\n'
+                                 f'<p class="sub">{reg["sub"]}</p>\n{nav}\n' + "\n".join(parts) + "\n</section>"))
+    if not regions:
         raise SystemExit(f"no YYYYMMDD_HHMM.png files in {root}")
 
-    nav = ""
-    if len(sections) > 1:
-        nav = "<nav>" + "".join(f'<a href="#{s["key"]}">{s["title"]}</a>' for s, _ in sections) + "</nav>"
+    tabs = ""
+    if len(regions) > 1:
+        tabs = ('<div class="tabs" role="tablist">' + "".join(
+            f'<button type="button" role="tab" data-region="{r["key"]}" aria-selected="false">{r["title"]}</button>'
+            for r, _ in regions) + "</div>")
     (root / "index.html").write_text(
-        PAGE.format(nav=nav, body="\n".join(parts),
+        PAGE.format(tabs=tabs, body="\n".join(html_ for _, html_ in regions),
                     built=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"))
     )
     (root / ".nojekyll").write_text("")  # serve files as-is, skip Jekyll
-    summary = ", ".join(f"{s['title']}: {len(n)} scans (newest {n[0][:-4]})" for s, n in sections)
-    print(f"Wrote {root / 'index.html'} ({summary})")
+    print(f"Wrote {root / 'index.html'} ({'; '.join(summary)})")
 
 
 if __name__ == "__main__":

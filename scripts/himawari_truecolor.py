@@ -89,6 +89,16 @@ PRODUCTS = {
 }
 for _p in PRODUCTS.values():
     _p["bands"] = tuple(c[0] for c in _p["channels"])  # (R, G, B) bands
+# Regions: default bbox and segments, the folder below --outdir ("" = the original top-level layout, so the
+# Sumatra-Borneo links keep working) and the caption corner that keeps the box off the land that matters.
+# Mekong: the caption sits top-right (southern China), as bottom-right would cover the Mekong delta and
+# bottom-left southern Thailand.
+REGIONS = {
+    "sumatra_borneo": dict(label="Sumatra, Malay Peninsula, Singapore and Borneo", bbox="94.5,-6.5,119.5,7.5",
+                           segments="5-6", subdir="", caption_corner="bottom-right"),
+    "mekong": dict(label="Mekong sub-region", bbox="92,8,110.5,29", segments="3-5", subdir="mekong",
+                   caption_corner="top-right"),
+}
 N_SEGMENTS = 10  # full disk is split into 10 equal N-S segments, 01 = north
 # Full-disk extent in geostationary projection y (metres, +north).  Verified
 # against the area extents Satpy reports for real data (see check_loaded_coverage).
@@ -591,7 +601,7 @@ def draw_graticule(img, bbox, resolution: float, step: float):
     w, s, e, n = bbox
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    size = max(11, round(img.height / 70))
+    size = max(11, round(min(img.height, 0.56 * img.width) / 70))  # text size follows the width for tall boxes
     font = _font(size)
     label = (255, 255, 255, GRATICULE_LABEL_ALPHA)
     halo = (0, 0, 0, 120)
@@ -640,7 +650,7 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
         img = ecmwf_winds.draw_streamlines(img, wind, bbox, resolution, wind_spacing, product.get("wind_rgb"))
     if coast_width > 0:
         draw_coastline(img, bbox, resolution, coast_width, product["coast_rgba"])
-    h = rgb.shape[0]
+    h = min(rgb.shape[0], 0.56 * rgb.shape[1])  # the default 25 x 14 box gives h = height; tall boxes keep the text size
     size = max(12, round(h / 48))
     big, small = _font(size), _font(round(size * 0.8))
     sgt = scan.astimezone(SGT)
@@ -699,13 +709,16 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--datetime-utc", default="", help="scan time YYYYMMDDHHMM (UTC); blank = newest complete scan")
-    p.add_argument("--bbox", default="94.5,-6.5,119.5,7.5", help="west,south,east,north in degrees")
+    p.add_argument("--region", choices=tuple(REGIONS), default="sumatra_borneo",
+                   help="preset for bbox, segments, output folder and caption corner (default sumatra_borneo); "
+                        "--bbox, --segments and --caption-corner override its values")
+    p.add_argument("--bbox", default=None, help="west,south,east,north in degrees (default: the region's)")
     p.add_argument("--product", choices=(*PRODUCTS, "all"), default="all",
                    help="which image(s) to build (default: all). At night only ir_enhanced is made")
     p.add_argument("--gamma", type=float, default=None,
                    help="gamma override for true_color and the True Color base of ir_enhanced (day_fire has per-channel gammas 0.4/1/1 and ignores "
                         "it); default 1.7 - 2.0 can help with haze")
-    p.add_argument("--segments", default="5-6", help="full-disk segments to download, e.g. 5-6")
+    p.add_argument("--segments", default=None, help="full-disk segments to download, e.g. 5-6 (default: the region's)")
     p.add_argument("--resolution", type=float, default=0.01, help="output pixel size in degrees (0.01 ~ 1 km)")
     p.add_argument("--rayleigh", action=argparse.BooleanOptionalAction, default=True,
                    help="apply Satpy Rayleigh correction to true_color and the True Color base of ir_enhanced (default "
@@ -729,15 +742,16 @@ def build_parser() -> argparse.ArgumentParser:
                         "edge exceeds this many degrees; the sun-angle correction overshoots and noise grows there "
                         "(default 65)")
     p.add_argument("--caption-corner", choices=("bottom-right", "bottom-left", "top-right", "top-left"),
-                   default="bottom-right",
-                   help="where the caption box goes; the default keeps it off southern Sumatra for the default bbox "
-                        "(bottom-right is open sea there)")
+                   default=None,
+                   help="where the caption box goes (default: the region's; for Sumatra-Borneo bottom-right, open sea "
+                        "that keeps southern Sumatra visible)")
     p.add_argument("--winds", action=argparse.BooleanOptionalAction, default=True,
                    help="overlay ECMWF IFS wind streamlines (default on; skipped with a warning if ECMWF data fail)")
     p.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa for the streamlines")
     p.add_argument("--wind-spacing", type=float, default=45.0, help="approximate streamline spacing in output pixels")
     p.add_argument("--outdir", default="output",
-                   help="directory for the PNGs (day_fire goes in its 'dayfire' subfolder, ir_enhanced in 'ir')")
+                   help="directory for the PNGs (day_fire goes in its 'dayfire' subfolder, ir_enhanced in 'ir'; "
+                        "a region other than sumatra_borneo adds its own folder first, e.g. mekong/dayfire)")
     p.add_argument("--workdir", default=None, help="scratch directory for HSD files (deleted afterwards)")
     p.add_argument("--lookback-hours", type=float, default=3.0, help="how far back to look for the newest scan")
     p.add_argument("--check-only", action="store_true", help="only list the bucket and run the checks")
@@ -746,8 +760,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(args) -> dict:
-    bbox = parse_bbox(args.bbox)
-    segments = parse_segments(args.segments)
+    region = REGIONS[args.region]
+    bbox = parse_bbox(args.bbox or region["bbox"])
+    segments = parse_segments(args.segments or region["segments"])
+    caption_corner = args.caption_corner or region["caption_corner"]
     if not 0.001 <= args.resolution <= 1:
         raise UserError(f"resolution must be between 0.001 and 1 degrees, got {args.resolution}")
     if args.gamma is not None and not 0.2 <= args.gamma <= 5:
@@ -776,6 +792,7 @@ def run(args) -> dict:
 
     result = {
         "status": "ok",
+        "region": args.region,
         "scan_utc": f"{scan:%Y%m%d_%H%M}",
         "scan_utc_iso": scan.strftime("%Y-%m-%d %H:%M UTC"),
         "scan_sgt_iso": scan.astimezone(SGT).strftime("%Y-%m-%d %H:%M SGT"),
@@ -899,10 +916,11 @@ def run(args) -> dict:
                 notes.append(f"{refl} divided by cos(sun zenith), capped at {sun[1]:g}\N{DEGREE SIGN}")
             if low_sun_note and not prod.get("ir"):
                 notes.append(low_sun_note)
-            out = Path(args.outdir) / prod["subdir"] / f"{scan:%Y%m%d_%H%M}.png"
+            folder = "/".join(p for p in (region["subdir"], prod["subdir"]) if p)  # "" = top level
+            out = Path(args.outdir) / folder / f"{scan:%Y%m%d_%H%M}.png"
             try:
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution,
-                                 coast_width, wind, args.wind_spacing, notes, args.caption_corner, grid_step,
+                                 coast_width, wind, args.wind_spacing, notes, caption_corner, grid_step,
                                  recipe_line, legend)
             except Exception as exc:  # noqa: BLE001
                 if wind is None:
@@ -912,9 +930,9 @@ def run(args) -> dict:
                          "publishing without them.")
                 wind = None  # later products skip them too
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution, coast_width,
-                                 None, args.wind_spacing, notes, args.caption_corner, grid_step, recipe_line, legend)
+                                 None, args.wind_spacing, notes, caption_corner, grid_step, recipe_line, legend)
             result["outputs"].append({
-                "product": name, "label": prod["label"], "png": str(out), "subdir": prod["subdir"],
+                "product": name, "label": prod["label"], "png": str(out), "subdir": folder,
                 "size_px": [int(rgb.shape[1]), int(rgb.shape[0])], "gamma": gamma_text(gammas),
                 "rayleigh": use_rayleigh,
                 **({"sunlit_fraction": round(day_frac, 3)} if day_frac is not None else {}),

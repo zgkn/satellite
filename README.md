@@ -1,6 +1,6 @@
 # satellite
 
-## Himawari-9 RGB: True Color, IR Enhanced and Day Fire (Sumatra, Malay Peninsula, Singapore, Borneo)
+## Himawari-9 RGB: True Color, IR Enhanced and Day Fire (Sumatra-Borneo and Mekong regions)
 
 A GitHub Actions workflow builds RGB images from Himawari-9 AHI full-disk data in the public NOAA NODD bucket
 (`s3://noaa-himawari9/AHI-L1b-FLDK/`, anonymous access, no AWS account needed). Each channel is scaled between a
@@ -13,6 +13,29 @@ corrections). True Color and Day Fire are daytime only; IR Enhanced also runs at
 | `true_color` | B03 0.64 µm | B02 0.51 µm | B01 0.47 µm | 1.7 | JMA | Natural-looking picture |
 | `ir_enhanced` | True Color + B13 10.4 µm IR overlay | | | 1.7 (True Color part) | JMA True Color + CIMSS Clean IR Window colours | Convection / cold cloud tops, day and night |
 | `day_fire` | B07 3.9 µm (27-60 °C) | B04 0.86 µm | B03 0.64 µm | 0.4 / 1 / 1 | NOAA/CIRA (VIIRS Day Fire RGB, on AHI bands; red minimum raised from 0 to 27 °C for the tropics; cold cloud shown grey) | Thermal hotspots |
+
+### Regions
+
+The same three products are built for two regions, chosen with the `region` input (`--region` locally). Each run builds
+one region; the website has a tab per region (the choice is remembered in the browser).
+
+| Region | Default box (`west,south,east,north`) | Segments | Image size | Caption box | Files on the output branch |
+|---|---|---|---|---|---|
+| `sumatra_borneo` | `94.5,-6.5,119.5,7.5` (Sumatra, Malay Peninsula, Singapore, Borneo) | 5-6 | 2500 × 1400 | bottom-right | top level, `dayfire/`, `ir/` |
+| `mekong` | `92,8,110.5,29` (Myanmar, Thailand, Laos, Cambodia, Vietnam, Yunnan) | 3-5 | 1850 × 2100 | top-right | `mekong/`, `mekong/dayfire/`, `mekong/ir/` |
+
+Notes on Mekong:
+- The caption sits top-right (southern China) because bottom-right would cover the Mekong delta and bottom-left southern
+  Thailand. The top-edge longitude labels under it (about 105°E and 110°E) are hidden.
+- It downloads three segments, so a run takes a little longer than Sumatra-Borneo.
+- The 925 hPa streamlines are left out where that level is below the ground, which is much of northern Thailand, Laos,
+  northern Myanmar and Yunnan; they show mainly over the lowlands and the sea.
+- The night rule is unchanged: True Color and Day Fire are skipped when the sun is below the horizon at the box centre
+  (101.25°E, 18.5°N), IR Enhanced still runs. That centre is about 5.75° of longitude (23 min of solar time) west of
+  Sumatra-Borneo's, so the cut-over falls at a slightly different UTC time.
+- `bbox` and `segments` can still be given to override a region's box. Housekeeping (2 days) covers every folder.
+- The Sumatra-Borneo links and website anchors (`#truecolor`, `#ir`, `#dayfire`) are unchanged; Mekong's are
+  `#mekong-truecolor`, `#mekong-ir` and `#mekong-dayfire`.
 
 ### How to run it
 
@@ -47,9 +70,10 @@ to redeploy). Note that Pages sites are public, and on a private repository Page
 |---|---|---|
 | `datetime_utc` | blank | Scan time **in UTC**, `YYYYMMDDHHMM`, minute ending in 0 (scans are every 10 min). Blank = newest complete scan from the last ~3 h. Examples: 08:00 SGT = `0000` UTC, 10:00 SGT = `0200` UTC, so `202610210200`. |
 | `product` | `all` | `true_color`, `ir_enhanced`, `day_fire` or `all`. With several, shared files (B03, B13) and the winds are fetched once. At night (sun below the horizon at the bbox centre) only `ir_enhanced` is made; the others are skipped with a notice. |
-| `bbox` | `94.5,-6.5,119.5,7.5` | `west,south,east,north` in degrees. Default covers Sumatra, Peninsular Malaysia, Singapore and Borneo. A smaller box gives a smaller image at the same pixel size; add a finer `resolution` (e.g. `0.005`) to enlarge a fire area. B07 itself only has 2 km pixels. |
+| `region` | `sumatra_borneo` | `sumatra_borneo` or `mekong` (see Regions). |
+| `bbox` | blank | `west,south,east,north` in degrees. Blank = the region's box (default Sumatra-Borneo covers Sumatra, Peninsular Malaysia, Singapore and Borneo). A smaller box gives a smaller image at the same pixel size; add a finer `resolution` (e.g. `0.005`) to enlarge a fire area. B07 itself only has 2 km pixels. |
 | `gamma` | blank | True Color gamma override. Blank = 1.7, as in the JMA guide. Try `2.0` for hazy scenes. `day_fire` ignores it (its recipe has different gammas per channel). |
-| `segments` | `5-6` | Full-disk segments to download (1 = north … 10 = south). 5-6 cover roughly 10°N-10°S. |
+| `segments` | blank | Full-disk segments to download (1 = north … 10 = south). Blank = the region's (5-6 cover roughly 10°N-10°S, 3-5 roughly 6°S-30°N). |
 | `resolution` | `0.01` | Output pixel size in degrees (0.01° ≈ 1 km, giving about 2500 × 1400 px for the default bbox). |
 | `winds` | **on** | Overlay thin streamlines (orange; white on IR Enhanced, where orange is lost against the red/yellow cloud colours) of ECMWF IFS 925 hPa wind (see below). If the ECMWF data cannot be fetched the run still publishes the images, without winds, and prints a warning. Locally: `--no-winds`, `--wind-level` (hPa), `--wind-spacing` (px). |
 | `coastlines` | **on** | Draw coastlines from Natural Earth 1:10m (public domain, stored in `data/ne_10m_coastline.zip`) at 1.5 px width: green on True Color, magenta on Day Fire (green would be confused with the vegetation colour). Untick for clean images. Locally: `--no-coastlines`, `--coast-width`. |

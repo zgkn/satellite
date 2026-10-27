@@ -21,10 +21,18 @@ on:
           - true_color
           - ir_enhanced
           - day_fire
-      bbox:
-        description: "Region west,south,east,north in degrees (default: Sumatra, Malay Peninsula, Singapore, Borneo)"
+      region:
+        description: "Which region: sumatra_borneo (Sumatra, Malay Peninsula, Singapore, Borneo) or mekong (Mekong sub-region). Each is published to its own tab on the website"
         required: false
-        default: "94.5,-6.5,119.5,7.5"
+        default: sumatra_borneo
+        type: choice
+        options:
+          - sumatra_borneo
+          - mekong
+      bbox:
+        description: "Box west,south,east,north in degrees. Blank = the region's (sumatra_borneo 94.5,-6.5,119.5,7.5; mekong 92,8,110.5,29)"
+        required: false
+        default: ""
         type: string
       gamma:
         description: "True color gamma override (blank = 1.7; try 2.0 for hazy scenes). Day fire ignores it"
@@ -32,9 +40,9 @@ on:
         default: ""
         type: string
       segments:
-        description: "Full-disk segments to download, 1 = north ... 10 = south (5-6 covers about 10N to 10S)"
+        description: "Full-disk segments to download, 1 = north ... 10 = south. Blank = the region's (sumatra_borneo 5-6; mekong 3-5)"
         required: false
-        default: "5-6"
+        default: ""
         type: string
       resolution:
         description: "Output pixel size in degrees (0.01 is about 1 km)"
@@ -117,6 +125,7 @@ jobs:
         env:
           IN_DATETIME: ${{ inputs.datetime_utc }}
           IN_PRODUCT: ${{ inputs.product }}
+          IN_REGION: ${{ inputs.region }}
           IN_BBOX: ${{ inputs.bbox }}
           IN_GAMMA: ${{ inputs.gamma }}
           IN_SEGMENTS: ${{ inputs.segments }}
@@ -131,13 +140,14 @@ jobs:
           args=(
             --datetime-utc "$IN_DATETIME"
             --product "$IN_PRODUCT"
-            --bbox "$IN_BBOX"
-            --segments "$IN_SEGMENTS"
+            --region "$IN_REGION"
             --resolution "$IN_RESOLUTION"
             --outdir output
             --workdir "$RUNNER_TEMP"
             --json-out output/result.json
           )
+          if [ -n "${IN_BBOX// /}" ]; then args+=(--bbox "$IN_BBOX"); fi
+          if [ -n "${IN_SEGMENTS// /}" ]; then args+=(--segments "$IN_SEGMENTS"); fi
           if [ -n "${IN_GAMMA// /}" ]; then args+=(--gamma "$IN_GAMMA"); fi
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
           if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
@@ -162,10 +172,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: himawari-rgb-${{ github.run_id }}
-          path: |
-            output/*.png
-            output/dayfire/*.png
-            output/ir/*.png
+          path: output/**/*.png
           if-no-files-found: error
           retention-days: 30
 
@@ -185,8 +192,9 @@ jobs:
             git archive FETCH_HEAD | tar -x -C "$pub"
           fi
 
-          # One folder per product: True Color at the top level (so existing links keep working),
-          # the others in subfolders. Each gets <scan>.png plus latest.png.
+          # One folder per product and region: Sumatra-Borneo True Color at the top level (so existing links
+          # keep working), the others in subfolders (dayfire/, ir/, mekong/, mekong/dayfire/ ...).
+          # Each gets <scan>.png plus latest.png.
           while IFS='|' read -r product png sub; do
             dir="$pub${sub:+/$sub}"
             mkdir -p "$dir"
@@ -211,7 +219,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -q -m "Himawari RGB $(jq -r .scan_utc_iso "$result")"
+          git commit -q -m "Himawari RGB $(jq -r .scan_utc_iso "$result") ($(jq -r .region "$result"))"
           git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$OUTPUT_BRANCH"
           echo "Pushed $(find . -name '*.png' | wc -l) PNGs to $OUTPUT_BRANCH"
 
@@ -228,6 +236,7 @@ jobs:
             echo "## Himawari-9 RGB"
             case "$STATUS" in
               ok)
+                echo "**Region:** $(jq -r .region $r)  "
                 echo "**Scan:** $(jq -r .scan_utc_iso $r) / $(jq -r .scan_sgt_iso $r)  "
                 echo "**Sun zenith at bbox centre:** $(jq -r .sun_zenith_centre $r)°  "
                 echo "**Segments:** $(jq -r '.segments | map(tostring) | join(",")' $r), bands $(jq -r '.bands | join("/")' $r) (all files present)  "

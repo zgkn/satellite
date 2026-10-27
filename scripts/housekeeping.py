@@ -2,7 +2,7 @@
 """Delete published Himawari images older than a number of days.
 
 Works on the output-branch layout: ``YYYYMMDD_HHMM.png`` files (UTC scan times) in the given
-directory and in each of its sub-folders (``dayfire/`` ...).  Age is measured from the scan
+directory and in every sub-folder at any depth (``dayfire/``, ``ir/``, ``mekong/dayfire/`` ...).  Age is measured from the scan
 time in the file name to now (UTC), not from file dates, which are meaningless after a git
 checkout.  ``latest.png`` is never touched, and neither is anything named with --keep (the
 workflow passes the images it has just published, so a historical scan older than the limit is
@@ -36,7 +36,7 @@ def scan_time(name: str) -> dt.datetime | None:
 def folders(root: Path):
     yield root
     for sub in sorted(p for p in root.iterdir() if p.is_dir() and p.name != "thumbs" and not p.name.startswith(".")):
-        yield sub
+        yield from folders(sub)
 
 
 def housekeeping(root: Path, max_age_days: float, now: dt.datetime, keep=(), dry_run: bool = False) -> int:
@@ -63,7 +63,7 @@ def housekeeping(root: Path, max_age_days: float, now: dt.datetime, keep=(), dry
         label = folder.relative_to(root).as_posix() if folder != root else "."
         newest_kept = kept[-1].name if kept else "-"
         oldest_kept = kept[0].name if kept else "-"
-        print(f"  {label:10s} kept {len(kept):3d} (oldest {oldest_kept}, newest {newest_kept}), "
+        print(f"  {label:14s} kept {len(kept):3d} (oldest {oldest_kept}, newest {newest_kept}), "
               f"removed {len(gone)}" + (": " + ", ".join(p.name for p in gone) if gone else ""))
     return removed
 

@@ -22,7 +22,7 @@ one region; the website has a tab per region (the choice is remembered in the br
 | Region | Default box (`west,south,east,north`) | Segments | Image size | Caption box | Files on the output branch |
 |---|---|---|---|---|---|
 | `sumatra_borneo` | `94.5,-6.5,119.5,7.5` (Sumatra, Malay Peninsula, Singapore, Borneo) | 5-6 | 2500 × 1400 | bottom-right | top level, `dayfire/`, `ir/` |
-| `mekong` | `92,8,110.5,29` (Myanmar, Thailand, Laos, Cambodia, Vietnam, Yunnan) | 3-5 | 1850 × 2100 | top-right | `mekong/`, `mekong/dayfire/`, `mekong/ir/` |
+| `mekong` | `92,6,110.5,29` (Myanmar, Thailand, Laos, Cambodia, Vietnam, Yunnan) | 3-5 | 1850 × 2300 | top-right | `mekong/`, `mekong/dayfire/`, `mekong/ir/` |
 
 Notes on Mekong:
 - The caption sits top-right (southern China) because bottom-right would cover the Mekong delta and bottom-left southern
@@ -31,7 +31,7 @@ Notes on Mekong:
 - The 925 hPa streamlines are left out where that level is below the ground, which is much of northern Thailand, Laos,
   northern Myanmar and Yunnan; they show mainly over the lowlands and the sea.
 - The night rule is unchanged: True Color and Day Fire are skipped when the sun is below the horizon at the box centre
-  (101.25°E, 18.5°N), IR Enhanced still runs. That centre is about 5.75° of longitude (23 min of solar time) west of
+  (101.25°E, 17.5°N), IR Enhanced still runs. That centre is about 5.75° of longitude (23 min of solar time) west of
   Sumatra-Borneo's, so the cut-over falls at a slightly different UTC time.
 - `bbox` and `segments` can still be given to override a region's box. Housekeeping (2 days) covers every folder.
 - The Sumatra-Borneo links and website anchors (`#truecolor`, `#ir`, `#dayfire`) are unchanged; Mekong's are

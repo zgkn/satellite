@@ -30,7 +30,7 @@ on:
           - sumatra_borneo
           - mekong
       bbox:
-        description: "Box west,south,east,north in degrees. Blank = the region's (sumatra_borneo 94.5,-6.5,119.5,7.5; mekong 92,8,110.5,29)"
+        description: "Box west,south,east,north in degrees. Blank = the region's (sumatra_borneo 94.5,-6.5,119.5,7.5; mekong 92,6,110.5,29)"
         required: false
         default: ""
         type: string

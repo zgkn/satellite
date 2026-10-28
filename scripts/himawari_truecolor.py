@@ -96,7 +96,7 @@ for _p in PRODUCTS.values():
 REGIONS = {
     "sumatra_borneo": dict(label="Sumatra, Malay Peninsula, Singapore and Borneo", bbox="94.5,-6.5,119.5,7.5",
                            segments="5-6", subdir="", caption_corner="bottom-right"),
-    "mekong": dict(label="Mekong sub-region", bbox="92,8,110.5,29", segments="3-5", subdir="mekong",
+    "mekong": dict(label="Mekong sub-region", bbox="92,6,110.5,29", segments="3-5", subdir="mekong",
                    caption_corner="top-right"),
 }
 N_SEGMENTS = 10  # full disk is split into 10 equal N-S segments, 01 = north

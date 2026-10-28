@@ -52,7 +52,11 @@ SECTIONS = (
     dict(
         key="truecolor", title="True Color", subdir="",
         blurb="JMA True Color RGB (R&nbsp;B03, G&nbsp;B02, B&nbsp;B01), Rayleigh-corrected, gamma 1.7.",
-        key_items=None, note=None,
+        key_items=(("#ff0000", "Fire pixel (3.9&nbsp;&micro;m, see note)"),),
+        note="Red marks are fire pixels from Himawari's 3.9&nbsp;&micro;m band: warmer than 52&nbsp;&deg;C, more than 8&nbsp;K "
+             "above their surroundings, not under cold cloud. It is a simple test, not an official fire product: pixels are "
+             "2&nbsp;km (the marks are drawn slightly larger so they show), small fires are missed, and sunlit hot ground or "
+             "glint can give false marks.",
     ),
     dict(
         key="ir", title="IR Enhanced", subdir="ir",

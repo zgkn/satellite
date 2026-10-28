@@ -59,6 +59,15 @@ PRODUCTS = {
     "true_color": dict(
         label="True Color RGB", recipe="JMA recipe", uniform_gamma=True, rayleigh=True,
         channels=(("B03", _REFL, 0, 100, 1.7), ("B02", _REFL, 0, 100, 1.7), ("B01", _REFL, 0, 100, 1.7)),
+        # fire_overlay: pixels with a hot 3.9 um signal are marked red on top of the picture (see make_fire_mask).
+        # A pixel is a fire when all hold: B07 above min_k, B07 more than anomaly_k above the median of its
+        # surroundings (window_deg wide, so hot bare ground and warm land are not marked), B13 at least cold_k
+        # (sunlit cold cloud top reflects 3.9 um and looks hot), and B07 - B13 at least min_diff_k. Tested on
+        # one fire-season scan per region: the 325 K / +8 K rule marked the cores of plumes seen in True Color
+        # (Sumatra 21 Oct 08:00 UTC: 435 px, 53 clusters, 4 px over sea; Mekong 15 Mar 06:00 UTC: 330 px, 29
+        # clusters; 27 Oct 05:00 UTC: none). An addition: not an official fire product.
+        fire_overlay=dict(bands=("B07", "B13"), min_k=325.0, anomaly_k=8.0, cold_k=280.0, min_diff_k=15.0,
+                          window_deg=0.15),
         subdir="", coast_rgba=(40, 255, 70, 255)),
     # NOAA/CIRA "VIIRS Day Fire RGB" quick guide, with AHI band 7 (3.9 um, 2 km) for VIIRS 3.7 um (375 m).
     # The guide scales the red channel 0..60 C; here the minimum is raised to 27 C (300.15 K) because tropical
@@ -469,6 +478,41 @@ def make_bt(files, bbox, resolution, band: str):
     return bt
 
 
+def make_fire_mask(files, bbox, resolution, cfg):
+    """Boolean (H, W) mask of fire pixels from B07 / B13 brightness temperatures, plus the number of clusters.
+
+    cfg is a PRODUCTS[...]["fire_overlay"] entry: B07 above min_k, more than anomaly_k above the median of the
+    surrounding window_deg, B13 at least cold_k and B07 - B13 at least min_diff_k.
+    """
+    import numpy as np
+    from scipy.ndimage import label, median_filter
+
+    b7 = make_bt(files, bbox, resolution, "B07")
+    b13 = make_bt(files, bbox, resolution, "B13")
+    size = max(3, round(cfg["window_deg"] / resolution) // 2 * 2 + 1)  # odd, in output pixels
+    anomaly = b7 - median_filter(np.nan_to_num(b7, nan=300.0), size=size)
+    mask = ((b7 > cfg["min_k"]) & (anomaly > cfg["anomaly_k"]) & (b13 >= cfg["cold_k"])
+            & ((b7 - b13) >= cfg["min_diff_k"]))
+    clusters = int(label(mask, structure=np.ones((3, 3)))[1])
+    log(f"  fire pixels: {int(mask.sum())} output px in {clusters} cluster(s) "
+        f"(B07 > {cfg['min_k']:g} K and > {cfg['anomaly_k']:g} K above its {size}-px surroundings, B13 >= {cfg['cold_k']:g} K)")
+    return mask, clusters
+
+
+def draw_fire(img, mask, resolution: float):
+    """Red fire markers on the RGBA image: each detected 2 km pixel is grown by 1 px so it shows, with a dark edge."""
+    import numpy as np
+    from PIL import Image
+    from scipy.ndimage import binary_dilation
+
+    core = binary_dilation(mask, iterations=1)
+    edge = binary_dilation(core, iterations=1) & ~core
+    layer = np.zeros(mask.shape + (4,), dtype="uint8")
+    layer[edge] = (0, 0, 0, 170)
+    layer[core] = (255, 0, 0, 255)
+    return Image.alpha_composite(img, Image.fromarray(layer, "RGBA"))
+
+
 def _smoothstep(x):
     import numpy as np
 
@@ -634,11 +678,12 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
                      bbox=None, resolution=None, coast_width: float = 0.0,
                      wind=None, wind_spacing: float = 45.0, notes=(),
                      corner: str = "bottom-right", grid_step: float = 0.0,
-                     recipe_line: str | None = None, legend: dict | None = None) -> None:
+                     recipe_line: str | None = None, legend: dict | None = None, fire_mask=None) -> None:
     """Draw graticule, streamlines, coastlines and the caption onto ``rgb`` and save it as ``out``.
 
     ``recipe_line`` replaces the caption's third line (the recipe summary); ``legend`` is a colour bar drawn at the
     bottom of the caption box: dict(title, colours=f(0..1 across the bar) -> (n, 3) floats in 0..1, ticks=[(frac, text)]).
+    ``fire_mask`` is a boolean (H, W) array of fire pixels, drawn in red above the coastlines.
     """
     import numpy as np
     from PIL import Image, ImageDraw
@@ -650,6 +695,8 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
         img = ecmwf_winds.draw_streamlines(img, wind, bbox, resolution, wind_spacing, product.get("wind_rgb"))
     if coast_width > 0:
         draw_coastline(img, bbox, resolution, coast_width, product["coast_rgba"])
+    if fire_mask is not None and fire_mask.any():
+        img = draw_fire(img, fire_mask, resolution)
     h = min(rgb.shape[0], 0.56 * rgb.shape[1])  # the default 25 x 14 box gives h = height; tall boxes keep the text size
     size = max(12, round(h / 48))
     big, small = _font(size), _font(round(size * 0.8))
@@ -729,6 +776,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--graticule", action=argparse.BooleanOptionalAction, default=True,
                    help="draw faint, labelled lat/lon lines (default on)")
     p.add_argument("--grid-step", type=float, default=5.0, help="graticule spacing in degrees (default 5)")
+    p.add_argument("--fire", action=argparse.BooleanOptionalAction, default=True,
+                   help="true_color only: mark fire pixels (hot 3.9 um signal, see PRODUCTS['true_color']['fire_overlay']) "
+                        "in red (default on; an addition, not an official fire product)")
     p.add_argument("--cloud-cue", action=argparse.BooleanOptionalAction, default=True,
                    help="day_fire only: show cold cloud (10.4 um brightness temperature below ~290 K) in grey so it "
                         "stands apart from smoke (default on; an addition to the NOAA/CIRA recipe)")
@@ -776,7 +826,9 @@ def run(args) -> dict:
         raise UserError(f"low-sun-zenith must be between 30 and 90 degrees, got {args.low_sun_zenith}")
     products = list(PRODUCTS) if args.product == "all" else [args.product]
     bands = sorted({b for p in products for b in PRODUCTS[p]["bands"] + PRODUCTS[p].get("extra_bands", ())}
-                   | {cue[0] for p in products if (cue := cloud_cue_for(PRODUCTS[p], args))})
+                   | {cue[0] for p in products if (cue := cloud_cue_for(PRODUCTS[p], args))}
+                   | {b for p in products if args.fire and PRODUCTS[p].get("fire_overlay")
+                      for b in PRODUCTS[p]["fire_overlay"]["bands"]})
     if args.winds and args.wind_level not in ecmwf_winds.PRESSURE_LEVELS:
         raise UserError(f"wind level must be one of {ecmwf_winds.PRESSURE_LEVELS} hPa, got {args.wind_level}")
     if not 10 <= args.wind_spacing <= 400:
@@ -848,6 +900,8 @@ def run(args) -> dict:
     needed = {b for p in products for b in PRODUCTS[p]["bands"] if sunlit or not PRODUCTS[p].get("night_ok")}
     needed |= {b for p in products for b in PRODUCTS[p].get("extra_bands", ())}
     needed |= {cue[0] for p in products if (cue := cloud_cue_for(PRODUCTS[p], args))}
+    needed |= {b for p in products if args.fire and PRODUCTS[p].get("fire_overlay")
+               for b in PRODUCTS[p]["fire_overlay"]["bands"]}
     keys = {k: v for k, v in keys.items() if k[0] in needed}
     result["bands"] = sorted(needed)
 
@@ -909,6 +963,12 @@ def run(args) -> dict:
                 log(f"  IR Enhanced: True Color weight {day_frac:.1%} of the area")
             else:
                 rgb = make_rgb(files, bbox, args.resolution, prod, gammas, use_rayleigh, cue, sun)
+            fire_mask = None
+            if args.fire and prod.get("fire_overlay"):
+                fire_mask, fire_clusters = make_fire_mask(files, bbox, args.resolution, prod["fire_overlay"])
+                fcfg = prod["fire_overlay"]
+                notes.append((f"Red: {fire_clusters} fire cluster(s), 3.9 um above {fcfg['min_k'] - 273.15:.0f} C and "
+                              f"{fcfg['anomaly_k']:g} K over surroundings (not an official product)", (255, 120, 120, 255)))
             if cue:
                 notes.append(f"Cold cloud ({cue[0]} < {cue[1]:g} K) shown grey; smoke and warm cloud keep their colour")
             if sun:
@@ -921,7 +981,7 @@ def run(args) -> dict:
             try:
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution,
                                  coast_width, wind, args.wind_spacing, notes, caption_corner, grid_step,
-                                 recipe_line, legend)
+                                 recipe_line, legend, fire_mask)
             except Exception as exc:  # noqa: BLE001
                 if wind is None:
                     raise
@@ -930,12 +990,13 @@ def run(args) -> dict:
                          "publishing without them.")
                 wind = None  # later products skip them too
                 overlay_and_save(rgb, scan, prod, gammas, use_rayleigh, out, bbox, args.resolution, coast_width,
-                                 None, args.wind_spacing, notes, caption_corner, grid_step, recipe_line, legend)
+                                 None, args.wind_spacing, notes, caption_corner, grid_step, recipe_line, legend, fire_mask)
             result["outputs"].append({
                 "product": name, "label": prod["label"], "png": str(out), "subdir": folder,
                 "size_px": [int(rgb.shape[1]), int(rgb.shape[0])], "gamma": gamma_text(gammas),
                 "rayleigh": use_rayleigh,
                 **({"sunlit_fraction": round(day_frac, 3)} if day_frac is not None else {}),
+                **({"fire_clusters": fire_clusters, "fire_pixels": int(fire_mask.sum())} if fire_mask is not None else {}),
             })
             log(f"Wrote {out} ({out.stat().st_size / 1e6:.1f} MB, {rgb.shape[1]}x{rgb.shape[0]})")
     finally:

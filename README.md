@@ -78,6 +78,7 @@ to redeploy). Note that Pages sites are public, and on a private repository Page
 | `winds` | **on** | Overlay thin streamlines (orange; white on IR Enhanced, where orange is lost against the red/yellow cloud colours) of ECMWF IFS 925 hPa wind (see below). If the ECMWF data cannot be fetched the run still publishes the images, without winds, and prints a warning. Locally: `--no-winds`, `--wind-level` (hPa), `--wind-spacing` (px). |
 | `coastlines` | **on** | Draw coastlines from Natural Earth 1:10m (public domain, stored in `data/ne_10m_coastline.zip`) at 1.5 px width: green on True Color, magenta on Day Fire (green would be confused with the vegetation colour). Untick for clean images. Locally: `--no-coastlines`, `--coast-width`. |
 | `graticule` | **on** | Faint, labelled lat/lon lines every 5° (labels on the top and left edges, clear of the caption), drawn under the winds and coastlines. Untick for a clean image. Locally: `--no-graticule`, `--grid-step` (degrees). The strength is the constant `GRATICULE_LINE_ALPHA` in the script. |
+| `fire` | **on** | **True Color only.** Mark fire pixels in red (see Fire pixels on True Color). Locally: `--no-fire`. |
 | `cloud_cue` | **on** | **Day Fire only.** Show cold cloud (10.4 µm below ~290 K) in grey so it stands apart from smoke (see Day Fire). Locally: `--no-cloud-cue`, `--cloud-bt`. |
 | `sun_correction` | **on** | **Day Fire only.** Divide the 0.86 and 0.64 µm channels by cos(sun zenith), capped at 80°, so brightness does not follow the sun (see Day Fire). Locally: `--no-sun-correction`. |
 | `rayleigh` | **on** | **True Color and the True Color base of IR Enhanced.** Apply Satpy's Rayleigh correction, which removes the blue atmospheric haze. It also applies the sun-zenith correction the modifier requires. Untick it for the plain JMA recipe, which is a bit faster. The first run downloads look-up tables; later runs reuse the cache. Day Fire never uses it. |
@@ -86,6 +87,24 @@ Scan times are always UTC. Himawari data appear in the bucket roughly 20-30 min 
 UTC** full-disk scans are missing from the bucket every day (10:40 and 22:40 SGT; presumably satellite housekeeping),
 so asking for those exact times fails with a "no files found" message; use the scan before or after. A blank
 `datetime_utc` handles this automatically by walking back to the newest complete scan.
+
+### Fire pixels on True Color
+
+True Color has red marks where a hot 3.9 µm (B07) signal is detected, in both regions. It uses the band behind Day Fire's red
+channel, with a simple test on the 1 km output grid: **B07 above 325 K (52 °C)**, **more than 8 K above the median of its
+surroundings** (a 15 px ≈ 0.15° window, so warm bare ground is not marked), **B13 at least 280 K** and **B07 − B13 at least
+15 K** (sunlit cold cloud tops reflect 3.9 µm and look hot). The thresholds are in `PRODUCTS["true_color"]["fire_overlay"]`.
+Each detected 2 km pixel is drawn about 3 px wide, in red with a thin dark edge, above the coastlines. The caption has a red line with the
+number of clusters.
+
+- **Checked on one scan per region:** Sumatra 21 Oct 2026 08:00 UTC, 435 px in 53 clusters, almost all inside smoke plumes
+  visible in True Color, 4 px over sea; Mekong 15 Mar 2026 06:00 UTC (burning season), 330 px in 29 clusters; Mekong 27 Oct 05:00 UTC,
+  none, as expected out of season. (Without the surroundings test, 167 000 Mekong pixels in March are above 315 K from warm ground alone.)
+- **Not an official product, and not complete:** pixels are 2 km, so small or cool fires are missed; thick cloud or smoke hides
+  fires; sunlit hot ground, sun glint and the reflected-sunlight part of 3.9 µm can still give false marks. For official
+  detections use e.g. NASA FIRMS (VIIRS/MODIS).
+- It adds the B07 and B13 files to the download for True Color. It applies only to True Color (not Day Fire, which already shows
+  hotspots, nor IR Enhanced).
 
 ### IR Enhanced
 

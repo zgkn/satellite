@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Himawari-9 RGB</title>
+<meta name="description" content="Latest Himawari-9 True Color, IR Enhanced and Day Fire images of Sumatra, the Malay Peninsula, Singapore and Borneo.">
+<style>
+:root { --bg:#f6f7f9; --fg:#14181f; --muted:#5b6573; --card:#fff; --line:#dfe3e8; --accent:#0b63ce; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#0d1117; --fg:#e6edf3; --muted:#8b97a5; --card:#161b22; --line:#2a313a; --accent:#58a6ff; }
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:20px 16px 48px; }
+h1 { font-size:1.4rem; margin:0 0 4px; }
+h2 { font-size:1.2rem; margin:0 0 4px; }
+h3 { font-size:1.05rem; margin:24px 0 12px; }
+p.sub, p.blurb { margin:0 0 12px; color:var(--muted); }
+a { color:var(--accent); }
+nav { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 8px; }
+nav a { text-decoration:none; padding:6px 12px; border:1px solid var(--line); border-radius:999px; background:var(--card); }
+section.product { margin-top:32px; scroll-margin-top:12px; }
+.hero { background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+.hero img { display:block; width:100%; height:auto; background:#000; }
+.meta { display:flex; flex-wrap:wrap; gap:6px 18px; justify-content:space-between; padding:12px 14px; }
+.meta strong { font-size:1.05rem; }
+.meta span { color:var(--muted); }
+ul.key { list-style:none; display:flex; flex-wrap:wrap; gap:6px 16px; margin:12px 0 4px; padding:0; }
+ul.key li { display:flex; align-items:center; gap:6px; font-size:.9rem; }
+ul.key i { width:16px; height:16px; border-radius:3px; border:1px solid var(--line); display:inline-block; }
+p.note { margin:4px 0 0; color:var(--muted); font-size:.85rem; }
+.scale { margin:12px 14px 4px; max-width:640px; }
+.scale div.bar { height:14px; border-radius:3px; border:1px solid var(--line); }
+.scale div.ticks { position:relative; height:1.2em; font-size:.75rem; color:var(--muted); margin-top:2px; }
+.scale div.ticks span { position:absolute; transform:translateX(-50%); }
+.scale p { margin:0 0 4px; font-size:.85rem; color:var(--muted); }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+.grid a { text-decoration:none; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; display:block; }
+.grid a:hover, .grid a:focus-visible { border-color:var(--accent); }
+.grid img { display:block; width:100%; height:auto; object-fit:cover; background:#000; }
+.hero img { max-height:88vh; object-fit:contain; }
+.tabs { display:flex; gap:8px; margin:0 0 16px; }
+.tabs button { font:inherit; padding:8px 18px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--fg); cursor:pointer; }
+.tabs button[aria-selected="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+.js section.region:not(.active) { display:none; }
+section.region + section.region { margin-top:40px; border-top:1px solid var(--line); padding-top:8px; }
+.grid small { display:block; padding:6px 8px; color:var(--muted); font-size:.78rem; line-height:1.3; }
+footer { margin-top:40px; color:var(--muted); font-size:.85rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Himawari-9 RGB</h1>
+<p class="sub">JMA and NOAA/CIRA RGB recipes plus a 10.4&nbsp;&micro;m infrared product &middot; True Color and Day Fire are daytime only, IR Enhanced runs day and night</p>
+<div class="tabs" role="tablist"><button type="button" role="tab" data-region="sumatra" aria-selected="false">Sumatra &amp; Borneo</button><button type="button" role="tab" data-region="mekong" aria-selected="false">Mekong</button></div>
+<section class="region" data-region="sumatra">
+<p class="sub">Sumatra, Malay Peninsula, Singapore and Borneo</p>
+<nav><a href="#truecolor">True Color</a><a href="#ir">IR Enhanced</a><a href="#dayfire">Day Fire</a></nav>
+<section class="product" id="truecolor">
+<h2>True Color</h2>
+<p class="blurb">JMA True Color RGB (R&nbsp;B03, G&nbsp;B02, B&nbsp;B01), Rayleigh-corrected, gamma 1.7.</p>
+<div class="hero">
+  <a href="20261031_1020.png?v=20261031_1020"><img src="20261031_1020.png?v=20261031_1020" alt="Himawari-9 True Color, 31 Oct 2026 10:20 UTC" width="2500" height="1400"></a>
+  <div class="meta">
+    <div><strong>31 Oct 2026 18:20 SGT</strong><br><span>31 Oct 2026 10:20 UTC</span></div>
+    <div><a href="20261031_1020.png?v=20261031_1020" download>Download PNG</a> &middot; <a href="20261031_1020.png?v=20261031_1020">Open full size</a></div>
+  </div>
+</div>
+<ul class="key"><li><i style="background:#ff0000"></i>Fire pixel (3.9&nbsp;&micro;m, see note)</li></ul><p class="note">Red marks are fire pixels from Himawari's 3.9&nbsp;&micro;m band: warmer than 52&nbsp;&deg;C, more than 8&nbsp;K above their surroundings, not under cold cloud. It is a simple test, not an official fire product: pixels are 2&nbsp;km (the marks are drawn slightly larger so they show), small fires are missed, and sunlit hot ground or glint can give false marks.</p>
+<h3>Recent scans (46)</h3>
+<div class="grid">
+<a href="20261031_1020.png"><img src="thumbs/20261031_1020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 18:20 SGT<br>31 Oct 2026 10:20 UTC</small></a>
+<a href="20261031_0940.png"><img src="thumbs/20261031_0940.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 17:40 SGT<br>31 Oct 2026 09:40 UTC</small></a>
+<a href="20261031_0920.png"><img src="thumbs/20261031_0920.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 17:20 SGT<br>31 Oct 2026 09:20 UTC</small></a>
+<a href="20261031_0840.png"><img src="thumbs/20261031_0840.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 16:40 SGT<br>31 Oct 2026 08:40 UTC</small></a>
+<a href="20261031_0820.png"><img src="thumbs/20261031_0820.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 16:20 SGT<br>31 Oct 2026 08:20 UTC</small></a>
+<a href="20261031_0740.png"><img src="thumbs/20261031_0740.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 15:40 SGT<br>31 Oct 2026 07:40 UTC</small></a>
+<a href="20261031_0720.png"><img src="thumbs/20261031_0720.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 15:20 SGT<br>31 Oct 2026 07:20 UTC</small></a>
+<a href="20261031_0640.png"><img src="thumbs/20261031_0640.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 14:40 SGT<br>31 Oct 2026 06:40 UTC</small></a>
+<a href="20261031_0620.png"><img src="thumbs/20261031_0620.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 14:20 SGT<br>31 Oct 2026 06:20 UTC</small></a>
+<a href="20261031_0540.png"><img src="thumbs/20261031_0540.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 13:40 SGT<br>31 Oct 2026 05:40 UTC</small></a>
+<a href="20261031_0520.png"><img src="thumbs/20261031_0520.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 13:20 SGT<br>31 Oct 2026 05:20 UTC</small></a>
+<a href="20261031_0440.png"><img src="thumbs/20261031_0440.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 12:40 SGT<br>31 Oct 2026 04:40 UTC</small></a>
+<a href="20261031_0420.png"><img src="thumbs/20261031_0420.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 12:20 SGT<br>31 Oct 2026 04:20 UTC</small></a>
+<a href="20261031_0340.png"><img src="thumbs/20261031_0340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 11:40 SGT<br>31 Oct 2026 03:40 UTC</small></a>
+<a href="20261031_0320.png"><img src="thumbs/20261031_0320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 11:20 SGT<br>31 Oct 2026 03:20 UTC</small></a>
+<a href="20261031_0230.png"><img src="thumbs/20261031_0230.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 10:30 SGT<br>31 Oct 2026 02:30 UTC</small></a>
+<a href="20261031_0220.png"><img src="thumbs/20261031_0220.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 10:20 SGT<br>31 Oct 2026 02:20 UTC</small></a>
+<a href="20261031_0140.png"><img src="thumbs/20261031_0140.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 09:40 SGT<br>31 Oct 2026 01:40 UTC</small></a>
+<a href="20261031_0120.png"><img src="thumbs/20261031_0120.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 09:20 SGT<br>31 Oct 2026 01:20 UTC</small></a>
+<a href="20261031_0040.png"><img src="thumbs/20261031_0040.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 08:40 SGT<br>31 Oct 2026 00:40 UTC</small></a>
+<a href="20261031_0020.png"><img src="thumbs/20261031_0020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 08:20 SGT<br>31 Oct 2026 00:20 UTC</small></a>
+<a href="20261030_2340.png"><img src="thumbs/20261030_2340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 07:40 SGT<br>30 Oct 2026 23:40 UTC</small></a>
+<a href="20261030_2320.png"><img src="thumbs/20261030_2320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 07:20 SGT<br>30 Oct 2026 23:20 UTC</small></a>
+<a href="20261030_2240.png"><img src="thumbs/20261030_2240.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 06:40 SGT<br>30 Oct 2026 22:40 UTC</small></a>
+<a href="20261030_1020.png"><img src="thumbs/20261030_1020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 18:20 SGT<br>30 Oct 2026 10:20 UTC</small></a>
+<a href="20261030_0940.png"><img src="thumbs/20261030_0940.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 17:40 SGT<br>30 Oct 2026 09:40 UTC</small></a>
+<a href="20261030_0920.png"><img src="thumbs/20261030_0920.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 17:20 SGT<br>30 Oct 2026 09:20 UTC</small></a>
+<a href="20261030_0840.png"><img src="thumbs/20261030_0840.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 16:40 SGT<br>30 Oct 2026 08:40 UTC</small></a>
+<a href="20261030_0820.png"><img src="thumbs/20261030_0820.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 16:20 SGT<br>30 Oct 2026 08:20 UTC</small></a>
+<a href="20261030_0740.png"><img src="thumbs/20261030_0740.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 15:40 SGT<br>30 Oct 2026 07:40 UTC</small></a>
+<a href="20261030_0720.png"><img src="thumbs/20261030_0720.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 15:20 SGT<br>30 Oct 2026 07:20 UTC</small></a>
+<a href="20261030_0640.png"><img src="thumbs/20261030_0640.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 14:40 SGT<br>30 Oct 2026 06:40 UTC</small></a>
+<a href="20261030_0620.png"><img src="thumbs/20261030_0620.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 14:20 SGT<br>30 Oct 2026 06:20 UTC</small></a>
+<a href="20261030_0540.png"><img src="thumbs/20261030_0540.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 13:40 SGT<br>30 Oct 2026 05:40 UTC</small></a>
+<a href="20261030_0520.png"><img src="thumbs/20261030_0520.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 13:20 SGT<br>30 Oct 2026 05:20 UTC</small></a>
+<a href="20261030_0420.png"><img src="thumbs/20261030_0420.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 12:20 SGT<br>30 Oct 2026 04:20 UTC</small></a>
+<a href="20261030_0340.png"><img src="thumbs/20261030_0340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 11:40 SGT<br>30 Oct 2026 03:40 UTC</small></a>
+<a href="20261030_0320.png"><img src="thumbs/20261030_0320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 11:20 SGT<br>30 Oct 2026 03:20 UTC</small></a>
+<a href="20261030_0220.png"><img src="thumbs/20261030_0220.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 10:20 SGT<br>30 Oct 2026 02:20 UTC</small></a>
+<a href="20261030_0140.png"><img src="thumbs/20261030_0140.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 09:40 SGT<br>30 Oct 2026 01:40 UTC</small></a>
+<a href="20261030_0120.png"><img src="thumbs/20261030_0120.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 09:20 SGT<br>30 Oct 2026 01:20 UTC</small></a>
+<a href="20261030_0040.png"><img src="thumbs/20261030_0040.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 08:40 SGT<br>30 Oct 2026 00:40 UTC</small></a>
+<a href="20261030_0020.png"><img src="thumbs/20261030_0020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 08:20 SGT<br>30 Oct 2026 00:20 UTC</small></a>
+<a href="20261029_2340.png"><img src="thumbs/20261029_2340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 07:40 SGT<br>29 Oct 2026 23:40 UTC</small></a>
+<a href="20261029_2320.png"><img src="thumbs/20261029_2320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 07:20 SGT<br>29 Oct 2026 23:20 UTC</small></a>
+<a href="20261029_2240.png"><img src="thumbs/20261029_2240.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 06:40 SGT<br>29 Oct 2026 22:40 UTC</small></a>
+</div>
+</section>
+<section class="product" id="ir">
+<h2>IR Enhanced</h2>
+<p class="blurb">True Color with a translucent colour overlay of the 10.4&nbsp;&micro;m infrared band (B13) by day; infrared only at night. Runs day and night.</p>
+<div class="hero">
+  <a href="ir/20261031_1920.png?v=20261031_1920"><img src="ir/20261031_1920.png?v=20261031_1920" alt="Himawari-9 IR Enhanced, 31 Oct 2026 19:20 UTC" width="2500" height="1400"></a>
+  <div class="meta">
+    <div><strong>01 Nov 2026 03:20 SGT</strong><br><span>31 Oct 2026 19:20 UTC</span></div>
+    <div><a href="ir/20261031_1920.png?v=20261031_1920" download>Download PNG</a> &middot; <a href="ir/20261031_1920.png?v=20261031_1920">Open full size</a></div>
+  </div>
+</div>
+<div class="scale"><p>Cloud-top temperature, 10.4&nbsp;&micro;m (&deg;C); warmer than &minus;20&nbsp;&deg;C is grey</p><div class="bar" style="background:linear-gradient(to right, rgb(0,255,255) 0.0%, rgb(0,204,227) 2.8%, rgb(0,166,206) 5.6%, rgb(0,115,178) 8.3%, rgb(0,64,150) 11.1%, rgb(0,13,122) 13.9%, rgb(0,21,105) 16.7%, rgb(0,85,77) 19.4%, rgb(0,128,58) 22.2%, rgb(0,191,29) 25.0%, rgb(0,255,0) 27.8%, rgb(51,255,0) 30.6%, rgb(102,255,0) 33.3%, rgb(153,255,0) 36.1%, rgb(204,255,0) 38.9%, rgb(255,255,0) 41.7%, rgb(255,179,0) 44.4%, rgb(255,153,0) 47.2%, rgb(255,102,0) 50.0%, rgb(255,77,0) 52.8%, rgb(255,26,0) 55.6%, rgb(230,0,0) 58.3%, rgb(179,0,0) 61.1%, rgb(128,0,0) 63.9%, rgb(77,0,0) 66.7%, rgb(26,0,0) 69.4%, rgb(28,28,28) 72.2%, rgb(76,76,76) 75.0%, rgb(123,133,123) 77.8%, rgb(174,174,174) 80.6%, rgb(219,219,217) 83.3%, rgb(242,114,195) 86.1%, rgb(210,82,176) 88.9%, rgb(191,64,165) 91.7%, rgb(172,45,154) 94.4%, rgb(127,0,127) 97.2%, rgb(255,255,14) 100.0%)"></div><div class="ticks"><span style="left:0.0%">-20</span><span style="left:13.9%">-30</span><span style="left:27.8%">-40</span><span style="left:41.7%">-50</span><span style="left:55.6%">-60</span><span style="left:69.4%">-70</span><span style="left:83.3%">-80</span><span style="left:97.2%">-90</span></div></div><p class="note">Colours follow the CIMSS/SSEC GOES Clean IR Window enhancement, applied to brightness temperature. By day the overlay is clear at &minus;20&nbsp;&deg;C and 70&nbsp;% opaque from &minus;40&nbsp;&deg;C and colder, so the surface stays visible under cloud. Where the sun is down, warm surfaces are grey (black is about +47&nbsp;&deg;C, an estimate) and everything colder than &minus;20&nbsp;&deg;C is opaque colour. The two blend by sun angle (True Color in full up to 60&deg; zenith, grey IR at 90&deg;), so dawn and dusk fade smoothly. The infrared band has 2&nbsp;km pixels (lightly smoothed here). Cold cloud tops are high, thick, usually convective cloud.</p>
+<h3>Recent scans (89)</h3>
+<div class="grid">
+<a href="ir/20261031_1920.png"><img src="ir/thumbs/20261031_1920.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>01 Nov 2026 03:20 SGT<br>31 Oct 2026 19:20 UTC</small></a>
+<a href="ir/20261031_1830.png"><img src="ir/thumbs/20261031_1830.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>01 Nov 2026 02:30 SGT<br>31 Oct 2026 18:30 UTC</small></a>
+<a href="ir/20261031_1820.png"><img src="ir/thumbs/20261031_1820.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>01 Nov 2026 02:20 SGT<br>31 Oct 2026 18:20 UTC</small></a>
+<a href="ir/20261031_1740.png"><img src="ir/thumbs/20261031_1740.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>01 Nov 2026 01:40 SGT<br>31 Oct 2026 17:40 UTC</small></a>
+<a href="ir/20261031_1720.png"><img src="ir/thumbs/20261031_1720.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>01 Nov 2026 01:20 SGT<br>31 Oct 2026 17:20 UTC</small></a>
+<a href="ir/20261031_1640.png"><img src="ir/thumbs/20261031_1640.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>01 Nov 2026 00:40 SGT<br>31 Oct 2026 16:40 UTC</small></a>
+<a href="ir/20261031_1620.png"><img src="ir/thumbs/20261031_1620.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>01 Nov 2026 00:20 SGT<br>31 Oct 2026 16:20 UTC</small></a>
+<a href="ir/20261031_1540.png"><img src="ir/thumbs/20261031_1540.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 23:40 SGT<br>31 Oct 2026 15:40 UTC</small></a>
+<a href="ir/20261031_1520.png"><img src="ir/thumbs/20261031_1520.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 23:20 SGT<br>31 Oct 2026 15:20 UTC</small></a>
+<a href="ir/20261031_1430.png"><img src="ir/thumbs/20261031_1430.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 22:30 SGT<br>31 Oct 2026 14:30 UTC</small></a>
+<a href="ir/20261031_1420.png"><img src="ir/thumbs/20261031_1420.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 22:20 SGT<br>31 Oct 2026 14:20 UTC</small></a>
+<a href="ir/20261031_1340.png"><img src="ir/thumbs/20261031_1340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 21:40 SGT<br>31 Oct 2026 13:40 UTC</small></a>
+<a href="ir/20261031_1320.png"><img src="ir/thumbs/20261031_1320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 21:20 SGT<br>31 Oct 2026 13:20 UTC</small></a>
+<a href="ir/20261031_1240.png"><img src="ir/thumbs/20261031_1240.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 20:40 SGT<br>31 Oct 2026 12:40 UTC</small></a>
+<a href="ir/20261031_1220.png"><img src="ir/thumbs/20261031_1220.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 20:20 SGT<br>31 Oct 2026 12:20 UTC</small></a>
+<a href="ir/20261031_1140.png"><img src="ir/thumbs/20261031_1140.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 19:40 SGT<br>31 Oct 2026 11:40 UTC</small></a>
+<a href="ir/20261031_1130.png"><img src="ir/thumbs/20261031_1130.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 19:30 SGT<br>31 Oct 2026 11:30 UTC</small></a>
+<a href="ir/20261031_1040.png"><img src="ir/thumbs/20261031_1040.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 18:40 SGT<br>31 Oct 2026 10:40 UTC</small></a>
+<a href="ir/20261031_1020.png"><img src="ir/thumbs/20261031_1020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 18:20 SGT<br>31 Oct 2026 10:20 UTC</small></a>
+<a href="ir/20261031_0940.png"><img src="ir/thumbs/20261031_0940.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 17:40 SGT<br>31 Oct 2026 09:40 UTC</small></a>
+<a href="ir/20261031_0920.png"><img src="ir/thumbs/20261031_0920.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 17:20 SGT<br>31 Oct 2026 09:20 UTC</small></a>
+<a href="ir/20261031_0840.png"><img src="ir/thumbs/20261031_0840.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 16:40 SGT<br>31 Oct 2026 08:40 UTC</small></a>
+<a href="ir/20261031_0820.png"><img src="ir/thumbs/20261031_0820.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 16:20 SGT<br>31 Oct 2026 08:20 UTC</small></a>
+<a href="ir/20261031_0740.png"><img src="ir/thumbs/20261031_0740.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 15:40 SGT<br>31 Oct 2026 07:40 UTC</small></a>
+<a href="ir/20261031_0720.png"><img src="ir/thumbs/20261031_0720.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 15:20 SGT<br>31 Oct 2026 07:20 UTC</small></a>
+<a href="ir/20261031_0640.png"><img src="ir/thumbs/20261031_0640.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 14:40 SGT<br>31 Oct 2026 06:40 UTC</small></a>
+<a href="ir/20261031_0620.png"><img src="ir/thumbs/20261031_0620.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 14:20 SGT<br>31 Oct 2026 06:20 UTC</small></a>
+<a href="ir/20261031_0540.png"><img src="ir/thumbs/20261031_0540.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 13:40 SGT<br>31 Oct 2026 05:40 UTC</small></a>
+<a href="ir/20261031_0520.png"><img src="ir/thumbs/20261031_0520.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 13:20 SGT<br>31 Oct 2026 05:20 UTC</small></a>
+<a href="ir/20261031_0440.png"><img src="ir/thumbs/20261031_0440.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 12:40 SGT<br>31 Oct 2026 04:40 UTC</small></a>
+<a href="ir/20261031_0420.png"><img src="ir/thumbs/20261031_0420.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 12:20 SGT<br>31 Oct 2026 04:20 UTC</small></a>
+<a href="ir/20261031_0340.png"><img src="ir/thumbs/20261031_0340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 11:40 SGT<br>31 Oct 2026 03:40 UTC</small></a>
+<a href="ir/20261031_0320.png"><img src="ir/thumbs/20261031_0320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 11:20 SGT<br>31 Oct 2026 03:20 UTC</small></a>
+<a href="ir/20261031_0230.png"><img src="ir/thumbs/20261031_0230.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 10:30 SGT<br>31 Oct 2026 02:30 UTC</small></a>
+<a href="ir/20261031_0220.png"><img src="ir/thumbs/20261031_0220.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 10:20 SGT<br>31 Oct 2026 02:20 UTC</small></a>
+<a href="ir/20261031_0140.png"><img src="ir/thumbs/20261031_0140.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 09:40 SGT<br>31 Oct 2026 01:40 UTC</small></a>
+<a href="ir/20261031_0120.png"><img src="ir/thumbs/20261031_0120.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 09:20 SGT<br>31 Oct 2026 01:20 UTC</small></a>
+<a href="ir/20261031_0040.png"><img src="ir/thumbs/20261031_0040.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 08:40 SGT<br>31 Oct 2026 00:40 UTC</small></a>
+<a href="ir/20261031_0020.png"><img src="ir/thumbs/20261031_0020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 08:20 SGT<br>31 Oct 2026 00:20 UTC</small></a>
+<a href="ir/20261030_2340.png"><img src="ir/thumbs/20261030_2340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 07:40 SGT<br>30 Oct 2026 23:40 UTC</small></a>
+<a href="ir/20261030_2320.png"><img src="ir/thumbs/20261030_2320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 07:20 SGT<br>30 Oct 2026 23:20 UTC</small></a>
+<a href="ir/20261030_2240.png"><img src="ir/thumbs/20261030_2240.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 06:40 SGT<br>30 Oct 2026 22:40 UTC</small></a>
+<a href="ir/20261030_2220.png"><img src="ir/thumbs/20261030_2220.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 06:20 SGT<br>30 Oct 2026 22:20 UTC</small></a>
+<a href="ir/20261030_2130.png"><img src="ir/thumbs/20261030_2130.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 05:30 SGT<br>30 Oct 2026 21:30 UTC</small></a>
+<a href="ir/20261030_2120.png"><img src="ir/thumbs/20261030_2120.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 05:20 SGT<br>30 Oct 2026 21:20 UTC</small></a>
+<a href="ir/20261030_2040.png"><img src="ir/thumbs/20261030_2040.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 04:40 SGT<br>30 Oct 2026 20:40 UTC</small></a>
+<a href="ir/20261030_2020.png"><img src="ir/thumbs/20261030_2020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 04:20 SGT<br>30 Oct 2026 20:20 UTC</small></a>
+<a href="ir/20261030_1940.png"><img src="ir/thumbs/20261030_1940.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 03:40 SGT<br>30 Oct 2026 19:40 UTC</small></a>
+<a href="ir/20261030_1920.png"><img src="ir/thumbs/20261030_1920.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 03:20 SGT<br>30 Oct 2026 19:20 UTC</small></a>
+<a href="ir/20261030_1830.png"><img src="ir/thumbs/20261030_1830.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 02:30 SGT<br>30 Oct 2026 18:30 UTC</small></a>
+<a href="ir/20261030_1820.png"><img src="ir/thumbs/20261030_1820.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 02:20 SGT<br>30 Oct 2026 18:20 UTC</small></a>
+<a href="ir/20261030_1740.png"><img src="ir/thumbs/20261030_1740.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 01:40 SGT<br>30 Oct 2026 17:40 UTC</small></a>
+<a href="ir/20261030_1720.png"><img src="ir/thumbs/20261030_1720.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 01:20 SGT<br>30 Oct 2026 17:20 UTC</small></a>
+<a href="ir/20261030_1640.png"><img src="ir/thumbs/20261030_1640.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 00:40 SGT<br>30 Oct 2026 16:40 UTC</small></a>
+<a href="ir/20261030_1620.png"><img src="ir/thumbs/20261030_1620.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 00:20 SGT<br>30 Oct 2026 16:20 UTC</small></a>
+<a href="ir/20261030_1530.png"><img src="ir/thumbs/20261030_1530.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 23:30 SGT<br>30 Oct 2026 15:30 UTC</small></a>
+<a href="ir/20261030_1520.png"><img src="ir/thumbs/20261030_1520.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 23:20 SGT<br>30 Oct 2026 15:20 UTC</small></a>
+<a href="ir/20261030_1340.png"><img src="ir/thumbs/20261030_1340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 21:40 SGT<br>30 Oct 2026 13:40 UTC</small></a>
+<a href="ir/20261030_1250.png"><img src="ir/thumbs/20261030_1250.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 20:50 SGT<br>30 Oct 2026 12:50 UTC</small></a>
+<a href="ir/20261030_1230.png"><img src="ir/thumbs/20261030_1230.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 20:30 SGT<br>30 Oct 2026 12:30 UTC</small></a>
+<a href="ir/20261030_1140.png"><img src="ir/thumbs/20261030_1140.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 19:40 SGT<br>30 Oct 2026 11:40 UTC</small></a>
+<a href="ir/20261030_1120.png"><img src="ir/thumbs/20261030_1120.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 19:20 SGT<br>30 Oct 2026 11:20 UTC</small></a>
+<a href="ir/20261030_1040.png"><img src="ir/thumbs/20261030_1040.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 18:40 SGT<br>30 Oct 2026 10:40 UTC</small></a>
+<a href="ir/20261030_1020.png"><img src="ir/thumbs/20261030_1020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 18:20 SGT<br>30 Oct 2026 10:20 UTC</small></a>
+<a href="ir/20261030_0940.png"><img src="ir/thumbs/20261030_0940.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 17:40 SGT<br>30 Oct 2026 09:40 UTC</small></a>
+<a href="ir/20261030_0920.png"><img src="ir/thumbs/20261030_0920.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 17:20 SGT<br>30 Oct 2026 09:20 UTC</small></a>
+<a href="ir/20261030_0840.png"><img src="ir/thumbs/20261030_0840.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 16:40 SGT<br>30 Oct 2026 08:40 UTC</small></a>
+<a href="ir/20261030_0820.png"><img src="ir/thumbs/20261030_0820.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 16:20 SGT<br>30 Oct 2026 08:20 UTC</small></a>
+<a href="ir/20261030_0740.png"><img src="ir/thumbs/20261030_0740.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 15:40 SGT<br>30 Oct 2026 07:40 UTC</small></a>
+<a href="ir/20261030_0720.png"><img src="ir/thumbs/20261030_0720.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 15:20 SGT<br>30 Oct 2026 07:20 UTC</small></a>
+<a href="ir/20261030_0640.png"><img src="ir/thumbs/20261030_0640.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 14:40 SGT<br>30 Oct 2026 06:40 UTC</small></a>
+<a href="ir/20261030_0620.png"><img src="ir/thumbs/20261030_0620.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 14:20 SGT<br>30 Oct 2026 06:20 UTC</small></a>
+<a href="ir/20261030_0540.png"><img src="ir/thumbs/20261030_0540.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 13:40 SGT<br>30 Oct 2026 05:40 UTC</small></a>
+<a href="ir/20261030_0520.png"><img src="ir/thumbs/20261030_0520.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 13:20 SGT<br>30 Oct 2026 05:20 UTC</small></a>
+<a href="ir/20261030_0420.png"><img src="ir/thumbs/20261030_0420.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 12:20 SGT<br>30 Oct 2026 04:20 UTC</small></a>
+<a href="ir/20261030_0340.png"><img src="ir/thumbs/20261030_0340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 11:40 SGT<br>30 Oct 2026 03:40 UTC</small></a>
+<a href="ir/20261030_0320.png"><img src="ir/thumbs/20261030_0320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 11:20 SGT<br>30 Oct 2026 03:20 UTC</small></a>
+<a href="ir/20261030_0220.png"><img src="ir/thumbs/20261030_0220.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 10:20 SGT<br>30 Oct 2026 02:20 UTC</small></a>
+<a href="ir/20261030_0140.png"><img src="ir/thumbs/20261030_0140.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 09:40 SGT<br>30 Oct 2026 01:40 UTC</small></a>
+<a href="ir/20261030_0120.png"><img src="ir/thumbs/20261030_0120.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 09:20 SGT<br>30 Oct 2026 01:20 UTC</small></a>
+<a href="ir/20261030_0040.png"><img src="ir/thumbs/20261030_0040.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 08:40 SGT<br>30 Oct 2026 00:40 UTC</small></a>
+<a href="ir/20261030_0020.png"><img src="ir/thumbs/20261030_0020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 08:20 SGT<br>30 Oct 2026 00:20 UTC</small></a>
+<a href="ir/20261029_2340.png"><img src="ir/thumbs/20261029_2340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 07:40 SGT<br>29 Oct 2026 23:40 UTC</small></a>
+<a href="ir/20261029_2320.png"><img src="ir/thumbs/20261029_2320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 07:20 SGT<br>29 Oct 2026 23:20 UTC</small></a>
+<a href="ir/20261029_2240.png"><img src="ir/thumbs/20261029_2240.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 06:40 SGT<br>29 Oct 2026 22:40 UTC</small></a>
+<a href="ir/20261029_2220.png"><img src="ir/thumbs/20261029_2220.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 06:20 SGT<br>29 Oct 2026 22:20 UTC</small></a>
+<a href="ir/20261029_2120.png"><img src="ir/thumbs/20261029_2120.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 05:20 SGT<br>29 Oct 2026 21:20 UTC</small></a>
+<a href="ir/20261029_2040.png"><img src="ir/thumbs/20261029_2040.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 04:40 SGT<br>29 Oct 2026 20:40 UTC</small></a>
+<a href="ir/20261029_2020.png"><img src="ir/thumbs/20261029_2020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 04:20 SGT<br>29 Oct 2026 20:20 UTC</small></a>
+</div>
+</section>
+<section class="product" id="dayfire">
+<h2>Day Fire</h2>
+<p class="blurb">NOAA/CIRA Day Fire RGB on Himawari bands (R&nbsp;B07 3.9&nbsp;&micro;m thermal, scaled 27&ndash;60&nbsp;&deg;C, G&nbsp;B04 0.86&nbsp;&micro;m, B&nbsp;B03 0.64&nbsp;&micro;m), gamma 0.4/1/1. Fires show red.</p>
+<div class="hero">
+  <a href="dayfire/20261031_1020.png?v=20261031_1020"><img src="dayfire/20261031_1020.png?v=20261031_1020" alt="Himawari-9 Day Fire, 31 Oct 2026 10:20 UTC" width="2500" height="1400"></a>
+  <div class="meta">
+    <div><strong>31 Oct 2026 18:20 SGT</strong><br><span>31 Oct 2026 10:20 UTC</span></div>
+    <div><a href="dayfire/20261031_1020.png?v=20261031_1020" download>Download PNG</a> &middot; <a href="dayfire/20261031_1020.png?v=20261031_1020">Open full size</a></div>
+  </div>
+</div>
+<ul class="key"><li><i style="background:#e0202b"></i>Fire / hot spot</li><li><i style="background:#8f4a3c"></i>New burn scar</li><li><i style="background:#4a8fd6"></i>Smoke</li><li><i style="background:#4cf5f5"></i>Low / warm cloud</li><li><i style="background:#c8c8c8"></i>Cold cloud (10.4 &micro;m below ~290 K, added)</li><li><i style="background:#2f8f3f"></i>Healthy vegetation</li><li><i style="background:#6b4a2b"></i>Bare ground / old burn scar / urban</li><li><i style="background:#050505"></i>Water</li></ul><p class="note">Recipe from the VIIRS Day Fire RGB quick guide, with the red minimum raised from 0 to 27&nbsp;&deg;C so tropical sea stays black. Over forest, smoke and cloud come out the same teal, so cold cloud (10.4&nbsp;&micro;m below ~290&nbsp;K) is shown grey; smoke and low, warm cloud keep their colour. The 0.86/0.64&nbsp;&micro;m channels are divided by cos(sun zenith), capped at 80&deg;, so brightness does not follow the sun (it overshoots when the sun is more than ~60&deg; from vertical; an amber low-sun note on the image marks that). Himawari's 3.9&nbsp;&micro;m band has 2&nbsp;km pixels (VIIRS: 375&nbsp;m), so only larger fires show. Warm, sunlit ground and sun glint on water can also look red, and thick cloud hides fires.</p>
+<h3>Recent scans (46)</h3>
+<div class="grid">
+<a href="dayfire/20261031_1020.png"><img src="dayfire/thumbs/20261031_1020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 18:20 SGT<br>31 Oct 2026 10:20 UTC</small></a>
+<a href="dayfire/20261031_0940.png"><img src="dayfire/thumbs/20261031_0940.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 17:40 SGT<br>31 Oct 2026 09:40 UTC</small></a>
+<a href="dayfire/20261031_0920.png"><img src="dayfire/thumbs/20261031_0920.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 17:20 SGT<br>31 Oct 2026 09:20 UTC</small></a>
+<a href="dayfire/20261031_0840.png"><img src="dayfire/thumbs/20261031_0840.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 16:40 SGT<br>31 Oct 2026 08:40 UTC</small></a>
+<a href="dayfire/20261031_0820.png"><img src="dayfire/thumbs/20261031_0820.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 16:20 SGT<br>31 Oct 2026 08:20 UTC</small></a>
+<a href="dayfire/20261031_0740.png"><img src="dayfire/thumbs/20261031_0740.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 15:40 SGT<br>31 Oct 2026 07:40 UTC</small></a>
+<a href="dayfire/20261031_0720.png"><img src="dayfire/thumbs/20261031_0720.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 15:20 SGT<br>31 Oct 2026 07:20 UTC</small></a>
+<a href="dayfire/20261031_0640.png"><img src="dayfire/thumbs/20261031_0640.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 14:40 SGT<br>31 Oct 2026 06:40 UTC</small></a>
+<a href="dayfire/20261031_0620.png"><img src="dayfire/thumbs/20261031_0620.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 14:20 SGT<br>31 Oct 2026 06:20 UTC</small></a>
+<a href="dayfire/20261031_0540.png"><img src="dayfire/thumbs/20261031_0540.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 13:40 SGT<br>31 Oct 2026 05:40 UTC</small></a>
+<a href="dayfire/20261031_0520.png"><img src="dayfire/thumbs/20261031_0520.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 13:20 SGT<br>31 Oct 2026 05:20 UTC</small></a>
+<a href="dayfire/20261031_0440.png"><img src="dayfire/thumbs/20261031_0440.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 12:40 SGT<br>31 Oct 2026 04:40 UTC</small></a>
+<a href="dayfire/20261031_0420.png"><img src="dayfire/thumbs/20261031_0420.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 12:20 SGT<br>31 Oct 2026 04:20 UTC</small></a>
+<a href="dayfire/20261031_0340.png"><img src="dayfire/thumbs/20261031_0340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 11:40 SGT<br>31 Oct 2026 03:40 UTC</small></a>
+<a href="dayfire/20261031_0320.png"><img src="dayfire/thumbs/20261031_0320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 11:20 SGT<br>31 Oct 2026 03:20 UTC</small></a>
+<a href="dayfire/20261031_0230.png"><img src="dayfire/thumbs/20261031_0230.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 10:30 SGT<br>31 Oct 2026 02:30 UTC</small></a>
+<a href="dayfire/20261031_0220.png"><img src="dayfire/thumbs/20261031_0220.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 10:20 SGT<br>31 Oct 2026 02:20 UTC</small></a>
+<a href="dayfire/20261031_0140.png"><img src="dayfire/thumbs/20261031_0140.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 09:40 SGT<br>31 Oct 2026 01:40 UTC</small></a>
+<a href="dayfire/20261031_0120.png"><img src="dayfire/thumbs/20261031_0120.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 09:20 SGT<br>31 Oct 2026 01:20 UTC</small></a>
+<a href="dayfire/20261031_0040.png"><img src="dayfire/thumbs/20261031_0040.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 08:40 SGT<br>31 Oct 2026 00:40 UTC</small></a>
+<a href="dayfire/20261031_0020.png"><img src="dayfire/thumbs/20261031_0020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 08:20 SGT<br>31 Oct 2026 00:20 UTC</small></a>
+<a href="dayfire/20261030_2340.png"><img src="dayfire/thumbs/20261030_2340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 07:40 SGT<br>30 Oct 2026 23:40 UTC</small></a>
+<a href="dayfire/20261030_2320.png"><img src="dayfire/thumbs/20261030_2320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 07:20 SGT<br>30 Oct 2026 23:20 UTC</small></a>
+<a href="dayfire/20261030_2240.png"><img src="dayfire/thumbs/20261030_2240.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>31 Oct 2026 06:40 SGT<br>30 Oct 2026 22:40 UTC</small></a>
+<a href="dayfire/20261030_1020.png"><img src="dayfire/thumbs/20261030_1020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 18:20 SGT<br>30 Oct 2026 10:20 UTC</small></a>
+<a href="dayfire/20261030_0940.png"><img src="dayfire/thumbs/20261030_0940.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 17:40 SGT<br>30 Oct 2026 09:40 UTC</small></a>
+<a href="dayfire/20261030_0920.png"><img src="dayfire/thumbs/20261030_0920.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 17:20 SGT<br>30 Oct 2026 09:20 UTC</small></a>
+<a href="dayfire/20261030_0840.png"><img src="dayfire/thumbs/20261030_0840.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 16:40 SGT<br>30 Oct 2026 08:40 UTC</small></a>
+<a href="dayfire/20261030_0820.png"><img src="dayfire/thumbs/20261030_0820.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 16:20 SGT<br>30 Oct 2026 08:20 UTC</small></a>
+<a href="dayfire/20261030_0740.png"><img src="dayfire/thumbs/20261030_0740.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 15:40 SGT<br>30 Oct 2026 07:40 UTC</small></a>
+<a href="dayfire/20261030_0720.png"><img src="dayfire/thumbs/20261030_0720.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 15:20 SGT<br>30 Oct 2026 07:20 UTC</small></a>
+<a href="dayfire/20261030_0640.png"><img src="dayfire/thumbs/20261030_0640.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 14:40 SGT<br>30 Oct 2026 06:40 UTC</small></a>
+<a href="dayfire/20261030_0620.png"><img src="dayfire/thumbs/20261030_0620.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 14:20 SGT<br>30 Oct 2026 06:20 UTC</small></a>
+<a href="dayfire/20261030_0540.png"><img src="dayfire/thumbs/20261030_0540.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 13:40 SGT<br>30 Oct 2026 05:40 UTC</small></a>
+<a href="dayfire/20261030_0520.png"><img src="dayfire/thumbs/20261030_0520.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 13:20 SGT<br>30 Oct 2026 05:20 UTC</small></a>
+<a href="dayfire/20261030_0420.png"><img src="dayfire/thumbs/20261030_0420.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 12:20 SGT<br>30 Oct 2026 04:20 UTC</small></a>
+<a href="dayfire/20261030_0340.png"><img src="dayfire/thumbs/20261030_0340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 11:40 SGT<br>30 Oct 2026 03:40 UTC</small></a>
+<a href="dayfire/20261030_0320.png"><img src="dayfire/thumbs/20261030_0320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 11:20 SGT<br>30 Oct 2026 03:20 UTC</small></a>
+<a href="dayfire/20261030_0220.png"><img src="dayfire/thumbs/20261030_0220.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 10:20 SGT<br>30 Oct 2026 02:20 UTC</small></a>
+<a href="dayfire/20261030_0140.png"><img src="dayfire/thumbs/20261030_0140.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 09:40 SGT<br>30 Oct 2026 01:40 UTC</small></a>
+<a href="dayfire/20261030_0120.png"><img src="dayfire/thumbs/20261030_0120.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 09:20 SGT<br>30 Oct 2026 01:20 UTC</small></a>
+<a href="dayfire/20261030_0040.png"><img src="dayfire/thumbs/20261030_0040.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 08:40 SGT<br>30 Oct 2026 00:40 UTC</small></a>
+<a href="dayfire/20261030_0020.png"><img src="dayfire/thumbs/20261030_0020.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 08:20 SGT<br>30 Oct 2026 00:20 UTC</small></a>
+<a href="dayfire/20261029_2340.png"><img src="dayfire/thumbs/20261029_2340.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 07:40 SGT<br>29 Oct 2026 23:40 UTC</small></a>
+<a href="dayfire/20261029_2320.png"><img src="dayfire/thumbs/20261029_2320.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 07:20 SGT<br>29 Oct 2026 23:20 UTC</small></a>
+<a href="dayfire/20261029_2240.png"><img src="dayfire/thumbs/20261029_2240.jpg" alt="" loading="lazy" style="aspect-ratio:2500/1400"><small>30 Oct 2026 06:40 SGT<br>29 Oct 2026 22:40 UTC</small></a>
+</div>
+</section>
+</section>
+<section class="region" data-region="mekong">
+<p class="sub">Mekong sub-region: Myanmar, Thailand, Laos, Cambodia, Vietnam and Yunnan</p>
+<nav><a href="#mekong-truecolor">True Color</a><a href="#mekong-ir">IR Enhanced</a><a href="#mekong-dayfire">Day Fire</a></nav>
+<section class="product" id="mekong-truecolor">
+<h2>True Color</h2>
+<p class="blurb">JMA True Color RGB (R&nbsp;B03, G&nbsp;B02, B&nbsp;B01), Rayleigh-corrected, gamma 1.7.</p>
+<div class="hero">
+  <a href="mekong/20261031_0930.png?v=20261031_0930"><img src="mekong/20261031_0930.png?v=20261031_0930" alt="Himawari-9 True Color, 31 Oct 2026 09:30 UTC" width="1850" height="2300"></a>
+  <div class="meta">
+    <div><strong>31 Oct 2026 17:30 SGT</strong><br><span>31 Oct 2026 09:30 UTC</span></div>
+    <div><a href="mekong/20261031_0930.png?v=20261031_0930" download>Download PNG</a> &middot; <a href="mekong/20261031_0930.png?v=20261031_0930">Open full size</a></div>
+  </div>
+</div>
+<ul class="key"><li><i style="background:#ff0000"></i>Fire pixel (3.9&nbsp;&micro;m, see note)</li></ul><p class="note">Red marks are fire pixels from Himawari's 3.9&nbsp;&micro;m band: warmer than 52&nbsp;&deg;C, more than 8&nbsp;K above their surroundings, not under cold cloud. It is a simple test, not an official fire product: pixels are 2&nbsp;km (the marks are drawn slightly larger so they show), small fires are missed, and sunlit hot ground or glint can give false marks.</p>
+<h3>Recent scans (18)</h3>
+<div class="grid">
+<a href="mekong/20261031_0930.png"><img src="mekong/thumbs/20261031_0930.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 17:30 SGT<br>31 Oct 2026 09:30 UTC</small></a>
+<a href="mekong/20261031_0830.png"><img src="mekong/thumbs/20261031_0830.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 16:30 SGT<br>31 Oct 2026 08:30 UTC</small></a>
+<a href="mekong/20261031_0730.png"><img src="mekong/thumbs/20261031_0730.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 15:30 SGT<br>31 Oct 2026 07:30 UTC</small></a>
+<a href="mekong/20261031_0530.png"><img src="mekong/thumbs/20261031_0530.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 13:30 SGT<br>31 Oct 2026 05:30 UTC</small></a>
+<a href="mekong/20261031_0430.png"><img src="mekong/thumbs/20261031_0430.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 12:30 SGT<br>31 Oct 2026 04:30 UTC</small></a>
+<a href="mekong/20261031_0330.png"><img src="mekong/thumbs/20261031_0330.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 11:30 SGT<br>31 Oct 2026 03:30 UTC</small></a>
+<a href="mekong/20261031_0130.png"><img src="mekong/thumbs/20261031_0130.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 09:30 SGT<br>31 Oct 2026 01:30 UTC</small></a>
+<a href="mekong/20261030_2330.png"><img src="mekong/thumbs/20261030_2330.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 07:30 SGT<br>30 Oct 2026 23:30 UTC</small></a>
+<a href="mekong/20261030_1030.png"><img src="mekong/thumbs/20261030_1030.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 18:30 SGT<br>30 Oct 2026 10:30 UTC</small></a>
+<a href="mekong/20261030_0930.png"><img src="mekong/thumbs/20261030_0930.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 17:30 SGT<br>30 Oct 2026 09:30 UTC</small></a>
+<a href="mekong/20261030_0830.png"><img src="mekong/thumbs/20261030_0830.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 16:30 SGT<br>30 Oct 2026 08:30 UTC</small></a>
+<a href="mekong/20261030_0730.png"><img src="mekong/thumbs/20261030_0730.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 15:30 SGT<br>30 Oct 2026 07:30 UTC</small></a>
+<a href="mekong/20261030_0530.png"><img src="mekong/thumbs/20261030_0530.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 13:30 SGT<br>30 Oct 2026 05:30 UTC</small></a>
+<a href="mekong/20261030_0430.png"><img src="mekong/thumbs/20261030_0430.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 12:30 SGT<br>30 Oct 2026 04:30 UTC</small></a>
+<a href="mekong/20261030_0330.png"><img src="mekong/thumbs/20261030_0330.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 11:30 SGT<br>30 Oct 2026 03:30 UTC</small></a>
+<a href="mekong/20261030_0230.png"><img src="mekong/thumbs/20261030_0230.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 10:30 SGT<br>30 Oct 2026 02:30 UTC</small></a>
+<a href="mekong/20261030_0130.png"><img src="mekong/thumbs/20261030_0130.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 09:30 SGT<br>30 Oct 2026 01:30 UTC</small></a>
+<a href="mekong/20261030_0030.png"><img src="mekong/thumbs/20261030_0030.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 08:30 SGT<br>30 Oct 2026 00:30 UTC</small></a>
+</div>
+</section>
+<section class="product" id="mekong-ir">
+<h2>IR Enhanced</h2>
+<p class="blurb">True Color with a translucent colour overlay of the 10.4&nbsp;&micro;m infrared band (B13) by day; infrared only at night. Runs day and night.</p>
+<div class="hero">
+  <a href="mekong/ir/20261031_1930.png?v=20261031_1930"><img src="mekong/ir/20261031_1930.png?v=20261031_1930" alt="Himawari-9 IR Enhanced, 31 Oct 2026 19:30 UTC" width="1850" height="2300"></a>
+  <div class="meta">
+    <div><strong>01 Nov 2026 03:30 SGT</strong><br><span>31 Oct 2026 19:30 UTC</span></div>
+    <div><a href="mekong/ir/20261031_1930.png?v=20261031_1930" download>Download PNG</a> &middot; <a href="mekong/ir/20261031_1930.png?v=20261031_1930">Open full size</a></div>
+  </div>
+</div>
+<div class="scale"><p>Cloud-top temperature, 10.4&nbsp;&micro;m (&deg;C); warmer than &minus;20&nbsp;&deg;C is grey</p><div class="bar" style="background:linear-gradient(to right, rgb(0,255,255) 0.0%, rgb(0,204,227) 2.8%, rgb(0,166,206) 5.6%, rgb(0,115,178) 8.3%, rgb(0,64,150) 11.1%, rgb(0,13,122) 13.9%, rgb(0,21,105) 16.7%, rgb(0,85,77) 19.4%, rgb(0,128,58) 22.2%, rgb(0,191,29) 25.0%, rgb(0,255,0) 27.8%, rgb(51,255,0) 30.6%, rgb(102,255,0) 33.3%, rgb(153,255,0) 36.1%, rgb(204,255,0) 38.9%, rgb(255,255,0) 41.7%, rgb(255,179,0) 44.4%, rgb(255,153,0) 47.2%, rgb(255,102,0) 50.0%, rgb(255,77,0) 52.8%, rgb(255,26,0) 55.6%, rgb(230,0,0) 58.3%, rgb(179,0,0) 61.1%, rgb(128,0,0) 63.9%, rgb(77,0,0) 66.7%, rgb(26,0,0) 69.4%, rgb(28,28,28) 72.2%, rgb(76,76,76) 75.0%, rgb(123,133,123) 77.8%, rgb(174,174,174) 80.6%, rgb(219,219,217) 83.3%, rgb(242,114,195) 86.1%, rgb(210,82,176) 88.9%, rgb(191,64,165) 91.7%, rgb(172,45,154) 94.4%, rgb(127,0,127) 97.2%, rgb(255,255,14) 100.0%)"></div><div class="ticks"><span style="left:0.0%">-20</span><span style="left:13.9%">-30</span><span style="left:27.8%">-40</span><span style="left:41.7%">-50</span><span style="left:55.6%">-60</span><span style="left:69.4%">-70</span><span style="left:83.3%">-80</span><span style="left:97.2%">-90</span></div></div><p class="note">Colours follow the CIMSS/SSEC GOES Clean IR Window enhancement, applied to brightness temperature. By day the overlay is clear at &minus;20&nbsp;&deg;C and 70&nbsp;% opaque from &minus;40&nbsp;&deg;C and colder, so the surface stays visible under cloud. Where the sun is down, warm surfaces are grey (black is about +47&nbsp;&deg;C, an estimate) and everything colder than &minus;20&nbsp;&deg;C is opaque colour. The two blend by sun angle (True Color in full up to 60&deg; zenith, grey IR at 90&deg;), so dawn and dusk fade smoothly. The infrared band has 2&nbsp;km pixels (lightly smoothed here). Cold cloud tops are high, thick, usually convective cloud.</p>
+<h3>Recent scans (41)</h3>
+<div class="grid">
+<a href="mekong/ir/20261031_1930.png"><img src="mekong/ir/thumbs/20261031_1930.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>01 Nov 2026 03:30 SGT<br>31 Oct 2026 19:30 UTC</small></a>
+<a href="mekong/ir/20261031_1830.png"><img src="mekong/ir/thumbs/20261031_1830.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>01 Nov 2026 02:30 SGT<br>31 Oct 2026 18:30 UTC</small></a>
+<a href="mekong/ir/20261031_1730.png"><img src="mekong/ir/thumbs/20261031_1730.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>01 Nov 2026 01:30 SGT<br>31 Oct 2026 17:30 UTC</small></a>
+<a href="mekong/ir/20261031_1630.png"><img src="mekong/ir/thumbs/20261031_1630.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>01 Nov 2026 00:30 SGT<br>31 Oct 2026 16:30 UTC</small></a>
+<a href="mekong/ir/20261031_1530.png"><img src="mekong/ir/thumbs/20261031_1530.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 23:30 SGT<br>31 Oct 2026 15:30 UTC</small></a>
+<a href="mekong/ir/20261031_1430.png"><img src="mekong/ir/thumbs/20261031_1430.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 22:30 SGT<br>31 Oct 2026 14:30 UTC</small></a>
+<a href="mekong/ir/20261031_1330.png"><img src="mekong/ir/thumbs/20261031_1330.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 21:30 SGT<br>31 Oct 2026 13:30 UTC</small></a>
+<a href="mekong/ir/20261031_1230.png"><img src="mekong/ir/thumbs/20261031_1230.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 20:30 SGT<br>31 Oct 2026 12:30 UTC</small></a>
+<a href="mekong/ir/20261031_1130.png"><img src="mekong/ir/thumbs/20261031_1130.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 19:30 SGT<br>31 Oct 2026 11:30 UTC</small></a>
+<a href="mekong/ir/20261031_0930.png"><img src="mekong/ir/thumbs/20261031_0930.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 17:30 SGT<br>31 Oct 2026 09:30 UTC</small></a>
+<a href="mekong/ir/20261031_0830.png"><img src="mekong/ir/thumbs/20261031_0830.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 16:30 SGT<br>31 Oct 2026 08:30 UTC</small></a>
+<a href="mekong/ir/20261031_0730.png"><img src="mekong/ir/thumbs/20261031_0730.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 15:30 SGT<br>31 Oct 2026 07:30 UTC</small></a>
+<a href="mekong/ir/20261031_0530.png"><img src="mekong/ir/thumbs/20261031_0530.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 13:30 SGT<br>31 Oct 2026 05:30 UTC</small></a>
+<a href="mekong/ir/20261031_0430.png"><img src="mekong/ir/thumbs/20261031_0430.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 12:30 SGT<br>31 Oct 2026 04:30 UTC</small></a>
+<a href="mekong/ir/20261031_0330.png"><img src="mekong/ir/thumbs/20261031_0330.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 11:30 SGT<br>31 Oct 2026 03:30 UTC</small></a>
+<a href="mekong/ir/20261031_0130.png"><img src="mekong/ir/thumbs/20261031_0130.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 09:30 SGT<br>31 Oct 2026 01:30 UTC</small></a>
+<a href="mekong/ir/20261030_2330.png"><img src="mekong/ir/thumbs/20261030_2330.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 07:30 SGT<br>30 Oct 2026 23:30 UTC</small></a>
+<a href="mekong/ir/20261030_2130.png"><img src="mekong/ir/thumbs/20261030_2130.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 05:30 SGT<br>30 Oct 2026 21:30 UTC</small></a>
+<a href="mekong/ir/20261030_2030.png"><img src="mekong/ir/thumbs/20261030_2030.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 04:30 SGT<br>30 Oct 2026 20:30 UTC</small></a>
+<a href="mekong/ir/20261030_1930.png"><img src="mekong/ir/thumbs/20261030_1930.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 03:30 SGT<br>30 Oct 2026 19:30 UTC</small></a>
+<a href="mekong/ir/20261030_1830.png"><img src="mekong/ir/thumbs/20261030_1830.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 02:30 SGT<br>30 Oct 2026 18:30 UTC</small></a>
+<a href="mekong/ir/20261030_1730.png"><img src="mekong/ir/thumbs/20261030_1730.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 01:30 SGT<br>30 Oct 2026 17:30 UTC</small></a>
+<a href="mekong/ir/20261030_1640.png"><img src="mekong/ir/thumbs/20261030_1640.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 00:40 SGT<br>30 Oct 2026 16:40 UTC</small></a>
+<a href="mekong/ir/20261030_1630.png"><img src="mekong/ir/thumbs/20261030_1630.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 00:30 SGT<br>30 Oct 2026 16:30 UTC</small></a>
+<a href="mekong/ir/20261030_1520.png"><img src="mekong/ir/thumbs/20261030_1520.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 23:20 SGT<br>30 Oct 2026 15:20 UTC</small></a>
+<a href="mekong/ir/20261030_1410.png"><img src="mekong/ir/thumbs/20261030_1410.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 22:10 SGT<br>30 Oct 2026 14:10 UTC</small></a>
+<a href="mekong/ir/20261030_1230.png"><img src="mekong/ir/thumbs/20261030_1230.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 20:30 SGT<br>30 Oct 2026 12:30 UTC</small></a>
+<a href="mekong/ir/20261030_1130.png"><img src="mekong/ir/thumbs/20261030_1130.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 19:30 SGT<br>30 Oct 2026 11:30 UTC</small></a>
+<a href="mekong/ir/20261030_1030.png"><img src="mekong/ir/thumbs/20261030_1030.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 18:30 SGT<br>30 Oct 2026 10:30 UTC</small></a>
+<a href="mekong/ir/20261030_0930.png"><img src="mekong/ir/thumbs/20261030_0930.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 17:30 SGT<br>30 Oct 2026 09:30 UTC</small></a>
+<a href="mekong/ir/20261030_0830.png"><img src="mekong/ir/thumbs/20261030_0830.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 16:30 SGT<br>30 Oct 2026 08:30 UTC</small></a>
+<a href="mekong/ir/20261030_0730.png"><img src="mekong/ir/thumbs/20261030_0730.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 15:30 SGT<br>30 Oct 2026 07:30 UTC</small></a>
+<a href="mekong/ir/20261030_0530.png"><img src="mekong/ir/thumbs/20261030_0530.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 13:30 SGT<br>30 Oct 2026 05:30 UTC</small></a>
+<a href="mekong/ir/20261030_0430.png"><img src="mekong/ir/thumbs/20261030_0430.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 12:30 SGT<br>30 Oct 2026 04:30 UTC</small></a>
+<a href="mekong/ir/20261030_0330.png"><img src="mekong/ir/thumbs/20261030_0330.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 11:30 SGT<br>30 Oct 2026 03:30 UTC</small></a>
+<a href="mekong/ir/20261030_0230.png"><img src="mekong/ir/thumbs/20261030_0230.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 10:30 SGT<br>30 Oct 2026 02:30 UTC</small></a>
+<a href="mekong/ir/20261030_0130.png"><img src="mekong/ir/thumbs/20261030_0130.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 09:30 SGT<br>30 Oct 2026 01:30 UTC</small></a>
+<a href="mekong/ir/20261030_0030.png"><img src="mekong/ir/thumbs/20261030_0030.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 08:30 SGT<br>30 Oct 2026 00:30 UTC</small></a>
+<a href="mekong/ir/20261029_2230.png"><img src="mekong/ir/thumbs/20261029_2230.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 06:30 SGT<br>29 Oct 2026 22:30 UTC</small></a>
+<a href="mekong/ir/20261029_2130.png"><img src="mekong/ir/thumbs/20261029_2130.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 05:30 SGT<br>29 Oct 2026 21:30 UTC</small></a>
+<a href="mekong/ir/20261029_2030.png"><img src="mekong/ir/thumbs/20261029_2030.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 04:30 SGT<br>29 Oct 2026 20:30 UTC</small></a>
+</div>
+</section>
+<section class="product" id="mekong-dayfire">
+<h2>Day Fire</h2>
+<p class="blurb">NOAA/CIRA Day Fire RGB on Himawari bands (R&nbsp;B07 3.9&nbsp;&micro;m thermal, scaled 27&ndash;60&nbsp;&deg;C, G&nbsp;B04 0.86&nbsp;&micro;m, B&nbsp;B03 0.64&nbsp;&micro;m), gamma 0.4/1/1. Fires show red.</p>
+<div class="hero">
+  <a href="mekong/dayfire/20261031_0930.png?v=20261031_0930"><img src="mekong/dayfire/20261031_0930.png?v=20261031_0930" alt="Himawari-9 Day Fire, 31 Oct 2026 09:30 UTC" width="1850" height="2300"></a>
+  <div class="meta">
+    <div><strong>31 Oct 2026 17:30 SGT</strong><br><span>31 Oct 2026 09:30 UTC</span></div>
+    <div><a href="mekong/dayfire/20261031_0930.png?v=20261031_0930" download>Download PNG</a> &middot; <a href="mekong/dayfire/20261031_0930.png?v=20261031_0930">Open full size</a></div>
+  </div>
+</div>
+<ul class="key"><li><i style="background:#e0202b"></i>Fire / hot spot</li><li><i style="background:#8f4a3c"></i>New burn scar</li><li><i style="background:#4a8fd6"></i>Smoke</li><li><i style="background:#4cf5f5"></i>Low / warm cloud</li><li><i style="background:#c8c8c8"></i>Cold cloud (10.4 &micro;m below ~290 K, added)</li><li><i style="background:#2f8f3f"></i>Healthy vegetation</li><li><i style="background:#6b4a2b"></i>Bare ground / old burn scar / urban</li><li><i style="background:#050505"></i>Water</li></ul><p class="note">Recipe from the VIIRS Day Fire RGB quick guide, with the red minimum raised from 0 to 27&nbsp;&deg;C so tropical sea stays black. Over forest, smoke and cloud come out the same teal, so cold cloud (10.4&nbsp;&micro;m below ~290&nbsp;K) is shown grey; smoke and low, warm cloud keep their colour. The 0.86/0.64&nbsp;&micro;m channels are divided by cos(sun zenith), capped at 80&deg;, so brightness does not follow the sun (it overshoots when the sun is more than ~60&deg; from vertical; an amber low-sun note on the image marks that). Himawari's 3.9&nbsp;&micro;m band has 2&nbsp;km pixels (VIIRS: 375&nbsp;m), so only larger fires show. Warm, sunlit ground and sun glint on water can also look red, and thick cloud hides fires.</p>
+<h3>Recent scans (18)</h3>
+<div class="grid">
+<a href="mekong/dayfire/20261031_0930.png"><img src="mekong/dayfire/thumbs/20261031_0930.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 17:30 SGT<br>31 Oct 2026 09:30 UTC</small></a>
+<a href="mekong/dayfire/20261031_0830.png"><img src="mekong/dayfire/thumbs/20261031_0830.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 16:30 SGT<br>31 Oct 2026 08:30 UTC</small></a>
+<a href="mekong/dayfire/20261031_0730.png"><img src="mekong/dayfire/thumbs/20261031_0730.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 15:30 SGT<br>31 Oct 2026 07:30 UTC</small></a>
+<a href="mekong/dayfire/20261031_0530.png"><img src="mekong/dayfire/thumbs/20261031_0530.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 13:30 SGT<br>31 Oct 2026 05:30 UTC</small></a>
+<a href="mekong/dayfire/20261031_0430.png"><img src="mekong/dayfire/thumbs/20261031_0430.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 12:30 SGT<br>31 Oct 2026 04:30 UTC</small></a>
+<a href="mekong/dayfire/20261031_0330.png"><img src="mekong/dayfire/thumbs/20261031_0330.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 11:30 SGT<br>31 Oct 2026 03:30 UTC</small></a>
+<a href="mekong/dayfire/20261031_0130.png"><img src="mekong/dayfire/thumbs/20261031_0130.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 09:30 SGT<br>31 Oct 2026 01:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_2330.png"><img src="mekong/dayfire/thumbs/20261030_2330.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>31 Oct 2026 07:30 SGT<br>30 Oct 2026 23:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_1030.png"><img src="mekong/dayfire/thumbs/20261030_1030.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 18:30 SGT<br>30 Oct 2026 10:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_0930.png"><img src="mekong/dayfire/thumbs/20261030_0930.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 17:30 SGT<br>30 Oct 2026 09:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_0830.png"><img src="mekong/dayfire/thumbs/20261030_0830.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 16:30 SGT<br>30 Oct 2026 08:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_0730.png"><img src="mekong/dayfire/thumbs/20261030_0730.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 15:30 SGT<br>30 Oct 2026 07:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_0530.png"><img src="mekong/dayfire/thumbs/20261030_0530.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 13:30 SGT<br>30 Oct 2026 05:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_0430.png"><img src="mekong/dayfire/thumbs/20261030_0430.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 12:30 SGT<br>30 Oct 2026 04:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_0330.png"><img src="mekong/dayfire/thumbs/20261030_0330.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 11:30 SGT<br>30 Oct 2026 03:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_0230.png"><img src="mekong/dayfire/thumbs/20261030_0230.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 10:30 SGT<br>30 Oct 2026 02:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_0130.png"><img src="mekong/dayfire/thumbs/20261030_0130.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 09:30 SGT<br>30 Oct 2026 01:30 UTC</small></a>
+<a href="mekong/dayfire/20261030_0030.png"><img src="mekong/dayfire/thumbs/20261030_0030.jpg" alt="" loading="lazy" style="aspect-ratio:1850/2300"><small>30 Oct 2026 08:30 SGT<br>30 Oct 2026 00:30 UTC</small></a>
+</div>
+</section>
+</section>
+<footer>
+  Data: Himawari-9 AHI, JMA / NOAA NODD (<code>s3://noaa-himawari9</code>); recipes: JMA MSC Himawari True Color RGB Quick Guide,
+  NOAA/CIRA VIIRS Day Fire RGB Quick Guide; IR colour scale after the CIMSS/SSEC GOES Clean IR Window enhancement;
+  coastlines: Natural Earth; wind streamlines: ECMWF open data (CC-BY-4.0).
+  Scan times are UTC; SGT = UTC+8. Page updated 2026-10-31 19:47 UTC.
+</footer>
+</main>
+<script>
+(function () {
+  var regions = document.querySelectorAll("section.region");
+  if (regions.length < 2) return;
+  document.documentElement.className += " js";
+  var tabs = document.querySelectorAll(".tabs button");
+  function show(key, keepHash) {
+    var found = false;
+    regions.forEach(function (r) { if (r.dataset.region === key) found = true; });
+    if (!found) key = regions[0].dataset.region;
+    regions.forEach(function (r) { r.classList.toggle("active", r.dataset.region === key); });
+    tabs.forEach(function (b) { b.setAttribute("aria-selected", b.dataset.region === key ? "true" : "false"); });
+    try { localStorage.setItem("himawari-region", key); } catch (e) {}
+    if (!keepHash) history.replaceState(null, "", "#" + key);
+  }
+  tabs.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.region); }); });
+  var start = null, hash = location.hash.slice(1);
+  regions.forEach(function (r) {
+    if (r.dataset.region === hash || r.querySelector('[id="' + hash + '"]')) start = r.dataset.region;
+  });
+  if (!start) { try { start = localStorage.getItem("himawari-region"); } catch (e) {} }
+  show(start || regions[0].dataset.region, true);
+})();
+</script>
+</body>
+</html>

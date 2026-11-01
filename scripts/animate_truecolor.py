@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""True Color animation: one frame per Himawari-9 scan between two times, with nothing drawn on the images.
+"""True Color animation: one frame per Himawari-9 scan between two times, with nothing but coastlines drawn on it.
 
 Separate from the operational pipeline: himawari_truecolor.py is imported as it is (not modified) and each frame is
-its plain True Color array (JMA recipe, gamma 1.7, Rayleigh on by default) saved without caption, graticule,
-coastlines, streamlines or fire marks.  Writes an MP4 (full size) and a GIF (reduced until it fits --max-mb), plus
+its True Color array (JMA recipe, gamma 1.7, Rayleigh on by default) with the green Natural Earth coastlines of the
+operational images (--no-coastlines for the bare picture), and no caption, graticule, streamlines or fire marks.  Writes an MP4 (full size) and a GIF (reduced until it fits --max-mb), plus
 frames.txt listing the scan time of every frame.
 
     python scripts/animate_truecolor.py --start 202610140600 --end 202610140800 --outdir out
@@ -64,6 +64,9 @@ def main(argv=None) -> int:
     ap.add_argument("--segments", default=None, help="full-disk segments (default: the region's)")
     ap.add_argument("--resolution", type=float, default=0.01)
     ap.add_argument("--rayleigh", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--coastlines", action=argparse.BooleanOptionalAction, default=True,
+                    help="draw the green coastlines (default on; file names then end in _coast)")
+    ap.add_argument("--coast-width", type=float, default=1.5, help="coastline width in output pixels")
     ap.add_argument("--gamma", type=float, default=None, help="gamma override (default 1.7, as in True Color)")
     ap.add_argument("--fps", type=float, default=4.0, help="frames per second (default 4)")
     ap.add_argument("--max-mb", type=float, default=19.0, help="size limit for the GIF in MB (default 19)")
@@ -100,7 +103,7 @@ def main(argv=None) -> int:
         gammas = (args.gamma,) * 3
     out = Path(args.outdir)
     out.mkdir(parents=True, exist_ok=True)
-    stem = args.name or f"truecolor_{args.region}_{start:%Y%m%d_%H%M}-{end:%H%M}"
+    stem = args.name or (f"truecolor_{args.region}_{start:%Y%m%d_%H%M}-{end:%H%M}" + ("_coast" if args.coastlines else ""))
     base = os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()  # TMPDIR is pointed at each frame's scratch below
     frames = Path(tempfile.mkdtemp(prefix="frames_", dir=base))
     s3 = h.s3_client()
@@ -122,7 +125,11 @@ def main(argv=None) -> int:
                     continue
                 h.log(f"--- frame {len(done) + 1}: {scan:%Y-%m-%d %H:%M} UTC")
                 rgb = h.make_rgb(h.download(s3, keys, work / "hsd"), bbox, args.resolution, prod, gammas, args.rayleigh)
-                Image.fromarray(rgb, "RGB").save(frames / f"frame_{len(done):03d}.png", compress_level=1)
+                img = Image.fromarray(rgb, "RGB")
+                if args.coastlines:
+                    img = h.draw_coastline(img.convert("RGBA"), bbox, args.resolution, args.coast_width,
+                                           prod["coast_rgba"]).convert("RGB")
+                img.save(frames / f"frame_{len(done):03d}.png", compress_level=1)
                 done.append(scan)
             finally:
                 shutil.rmtree(work, ignore_errors=True)

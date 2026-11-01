@@ -1,8 +1,8 @@
 name: Himawari True Color animation
 
 # Separate from the operational "Himawari RGB" workflow: nothing here touches himawari-output, its images,
-# its housekeeping or its site. Builds a plain True Color animation (no caption, graticule, coastlines, winds or
-# fire marks) from the scans between two times. Results go to the artifact and to the orphan branch himawari-adhoc
+# its housekeeping or its site. Builds a True Color animation (green coastlines by default; no caption, graticule,
+# winds or fire marks) from the scans between two times. Results go to the artifact and to the orphan branch himawari-adhoc
 # (folder animations/, earlier files kept). Manual only. Defaults: 14 Oct 2026 06:00-08:00 UTC, Sumatra-Borneo.
 on:
   workflow_dispatch:
@@ -37,6 +37,11 @@ on:
         type: string
       rayleigh:
         description: "Apply Rayleigh correction (as the operational True Color does)"
+        required: false
+        default: true
+        type: boolean
+      coastlines:
+        description: "Draw the green coastlines (untick for the bare picture)"
         required: false
         default: true
         type: boolean
@@ -92,9 +97,11 @@ jobs:
           IN_STEP: ${{ inputs.step_min }}
           IN_FPS: ${{ inputs.fps }}
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
+          IN_COASTLINES: ${{ inputs.coastlines }}
         run: |
           args=(--start "$IN_START" --end "$IN_END" --region "$IN_REGION" --step-min "$IN_STEP" --fps "$IN_FPS" --outdir output-animation)
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
+          if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
           python scripts/animate_truecolor.py "${args[@]}"
           ls -la output-animation
 
@@ -133,7 +140,7 @@ jobs:
         run: |
           {
             echo "## Himawari True Color animation"
-            echo "Scans ${{ inputs.start_utc }} to ${{ inputs.end_utc }} UTC every ${{ inputs.step_min }} min, region ${{ inputs.region }}, Rayleigh ${{ inputs.rayleigh }}."
+            echo "Scans ${{ inputs.start_utc }} to ${{ inputs.end_utc }} UTC every ${{ inputs.step_min }} min, region ${{ inputs.region }}, Rayleigh ${{ inputs.rayleigh }}, coastlines ${{ inputs.coastlines }}."
             echo "Files on branch \`himawari-adhoc\` in \`animations/\`:"
             for f in output-animation/*; do [ -f "$f" ] && echo "- \`$(basename "$f")\` ($(du -h "$f" | cut -f1))"; done
           } >> "$GITHUB_STEP_SUMMARY"

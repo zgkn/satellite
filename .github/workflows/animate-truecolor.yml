@@ -25,6 +25,16 @@ on:
         options:
           - sumatra_borneo
           - mekong
+      bbox:
+        description: "Box west,south,east,north in degrees. Blank = the region's"
+        required: false
+        default: ""
+        type: string
+      resolution:
+        description: "Output pixel size in degrees (0.01 is about 1 km; 0.005 suits a small box)"
+        required: false
+        default: "0.01"
+        type: string
       step_min:
         description: "Minutes between frames (10 = every scan)"
         required: false
@@ -94,12 +104,15 @@ jobs:
           IN_START: ${{ inputs.start_utc }}
           IN_END: ${{ inputs.end_utc }}
           IN_REGION: ${{ inputs.region }}
+          IN_BBOX: ${{ inputs.bbox }}
+          IN_RESOLUTION: ${{ inputs.resolution }}
           IN_STEP: ${{ inputs.step_min }}
           IN_FPS: ${{ inputs.fps }}
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
           IN_COASTLINES: ${{ inputs.coastlines }}
         run: |
-          args=(--start "$IN_START" --end "$IN_END" --region "$IN_REGION" --step-min "$IN_STEP" --fps "$IN_FPS" --outdir output-animation)
+          args=(--start "$IN_START" --end "$IN_END" --region "$IN_REGION" --resolution "$IN_RESOLUTION" --step-min "$IN_STEP" --fps "$IN_FPS" --outdir output-animation)
+          if [ -n "${IN_BBOX// /}" ]; then args+=(--bbox "$IN_BBOX"); fi
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
           if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
           python scripts/animate_truecolor.py "${args[@]}"

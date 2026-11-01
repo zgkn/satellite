@@ -41,7 +41,7 @@ def make_gif(frames: Path, fps: float, out: Path, max_bytes: int) -> int:
     """Smallest-effort GIF that fits ``max_bytes``: shrink the width until it does. Returns the width used."""
     for width in GIF_WIDTHS:
         palette = frames / "palette.png"
-        scale = f"fps={fps:g},scale={width}:-1:flags=lanczos"
+        scale = f"fps={fps:g},scale='min({width},iw)':-1:flags=lanczos"  # never upscale a small box
         run_ffmpeg(["-framerate", f"{fps:g}", "-i", str(frames / "frame_%03d.png"),
                     "-vf", f"{scale},palettegen=stats_mode=diff", str(palette)])
         run_ffmpeg(["-framerate", f"{fps:g}", "-i", str(frames / "frame_%03d.png"), "-i", str(palette),
@@ -103,7 +103,7 @@ def main(argv=None) -> int:
         gammas = (args.gamma,) * 3
     out = Path(args.outdir)
     out.mkdir(parents=True, exist_ok=True)
-    stem = args.name or (f"truecolor_{args.region}_{start:%Y%m%d_%H%M}-{end:%H%M}" + ("_coast" if args.coastlines else ""))
+    stem = args.name or (f"truecolor_{'box' if args.bbox else args.region}_{start:%Y%m%d_%H%M}-{end:%H%M}" + ("_coast" if args.coastlines else ""))
     base = os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()  # TMPDIR is pointed at each frame's scratch below
     frames = Path(tempfile.mkdtemp(prefix="frames_", dir=base))
     s3 = h.s3_client()

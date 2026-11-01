@@ -1,0 +1,139 @@
+name: Himawari True Color animation
+
+# Separate from the operational "Himawari RGB" workflow: nothing here touches himawari-output, its images,
+# its housekeeping or its site. Builds a plain True Color animation (no caption, graticule, coastlines, winds or
+# fire marks) from the scans between two times. Results go to the artifact and to the orphan branch himawari-adhoc
+# (folder animations/, earlier files kept). Manual only. Defaults: 14 Oct 2026 06:00-08:00 UTC, Sumatra-Borneo.
+on:
+  workflow_dispatch:
+    inputs:
+      start_utc:
+        description: "First scan, UTC, YYYYMMDDHHMM (minute ends in 0)"
+        required: false
+        default: "202610140600"
+        type: string
+      end_utc:
+        description: "Last scan (included), UTC, YYYYMMDDHHMM"
+        required: false
+        default: "202610140800"
+        type: string
+      region:
+        description: "Region: sumatra_borneo or mekong"
+        required: false
+        default: sumatra_borneo
+        type: choice
+        options:
+          - sumatra_borneo
+          - mekong
+      step_min:
+        description: "Minutes between frames (10 = every scan)"
+        required: false
+        default: "10"
+        type: string
+      fps:
+        description: "Frames per second"
+        required: false
+        default: "4"
+        type: string
+      rayleigh:
+        description: "Apply Rayleigh correction (as the operational True Color does)"
+        required: false
+        default: true
+        type: boolean
+
+# Shares the group of the ad-hoc plot workflow: both write only the himawari-adhoc branch, one at a time.
+concurrency:
+  group: himawari-adhoc
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  animate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ADHOC_BRANCH: himawari-adhoc
+      # Same location and cache key as the operational workflow, so the Rayleigh look-up tables are shared.
+      PSP_DATA_ROOT: ${{ github.workspace }}/.pyspectral-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Make sure bzip2 and ffmpeg are available
+        run: |
+          missing=()
+          command -v bzip2 >/dev/null || missing+=(bzip2)
+          command -v ffmpeg >/dev/null || missing+=(ffmpeg)
+          if [ ${#missing[@]} -gt 0 ]; then sudo apt-get update -qq && sudo apt-get install -y -qq "${missing[@]}"; fi
+          ffmpeg -version | head -n 1
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Cache pyspectral data (Rayleigh LUTs)
+        if: ${{ inputs.rayleigh }}
+        uses: actions/cache@v4
+        with:
+          path: .pyspectral-data
+          key: pyspectral-${{ runner.os }}-v1
+
+      - name: Build the animation
+        env:
+          IN_START: ${{ inputs.start_utc }}
+          IN_END: ${{ inputs.end_utc }}
+          IN_REGION: ${{ inputs.region }}
+          IN_STEP: ${{ inputs.step_min }}
+          IN_FPS: ${{ inputs.fps }}
+          IN_RAYLEIGH: ${{ inputs.rayleigh }}
+        run: |
+          args=(--start "$IN_START" --end "$IN_END" --region "$IN_REGION" --step-min "$IN_STEP" --fps "$IN_FPS" --outdir output-animation)
+          if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
+          python scripts/animate_truecolor.py "${args[@]}"
+          ls -la output-animation
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: himawari-animation-${{ github.run_id }}
+          path: output-animation/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish to the ad-hoc branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pub="$RUNNER_TEMP/pub-anim"
+          rm -rf "$pub"; mkdir -p "$pub"
+          # Keep what is already on the branch (earlier ad-hoc plots and animations); only this branch is touched.
+          if git ls-remote --exit-code --heads origin "$ADHOC_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$ADHOC_BRANCH"
+            git archive FETCH_HEAD | tar -x -C "$pub"
+          fi
+          mkdir -p "$pub/animations"
+          cp output-animation/* "$pub/animations/"
+          cd "$pub"
+          git init -q -b "$ADHOC_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "True Color animation ${{ inputs.start_utc }}-${{ inputs.end_utc }} (${{ inputs.region }})"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$ADHOC_BRANCH"
+
+      - name: Job summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## Himawari True Color animation"
+            echo "Scans ${{ inputs.start_utc }} to ${{ inputs.end_utc }} UTC every ${{ inputs.step_min }} min, region ${{ inputs.region }}, Rayleigh ${{ inputs.rayleigh }}."
+            echo "Files on branch \`himawari-adhoc\` in \`animations/\`:"
+            for f in output-animation/*; do [ -f "$f" ] && echo "- \`$(basename "$f")\` ($(du -h "$f" | cut -f1))"; done
+          } >> "$GITHUB_STEP_SUMMARY"

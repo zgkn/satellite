@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
+import time
 from dataclasses import dataclass
 
 BUCKET = "ecmwf-forecasts"
@@ -16,6 +18,9 @@ RUN_HOURS = 6  # runs at 00/06/12/18 UTC
 STEP_HOURS = 3  # 3-hourly steps are available for every run up to +90 h
 MAX_STEP = 90
 MAX_RUNS_BACK = 8  # look back at most 48 h for a published run
+MAX_RUNS_TRIED = 2  # newest run first; if its data cannot be fetched, fall back to the previous one
+RETRY_DELAYS = (10, 30, 60)  # seconds to wait before the 2nd, 3rd and 4th try of a throttled/failed request
+WIND_BUDGET_S = 240  # stop retrying and give up on winds after about this long (the images matter more)
 PRESSURE_LEVELS = (1000, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100, 50)
 
 LINE_RGB = (255, 170, 30)  # orange: shows over dark ocean/land and over white cloud
@@ -39,6 +44,7 @@ class WindField:
     init: dt.datetime
     step_lo: int
     step_hi: int
+    note: str = ""  # e.g. "newest run 01 Nov 18Z unavailable: ..." when an older run had to be used
 
     def describe(self) -> str:
         steps = f"+{self.step_lo} h" if self.step_lo == self.step_hi else f"+{self.step_lo}/+{self.step_hi} h"
@@ -50,20 +56,46 @@ def _key(init: dt.datetime, step: int, ext: str) -> str:
     return f"{init:%Y%m%d}/{init:%H}z/ifs/0p25/oper/{init:%Y%m%d%H}0000-{step}h-oper-fc.{ext}"
 
 
+def _note(msg: str) -> None:
+    print(msg, flush=True)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print(f"::warning::{msg}", flush=True)
+
+
+def _retry(what: str, fn, deadline: float | None = None):
+    """Call ``fn()``; on any error (S3 'SlowDown' throttling most often) wait and try again, as RETRY_DELAYS says.
+
+    Gives up early when the next wait would end after ``deadline`` (a time.monotonic() value).
+    """
+    for delay in (*RETRY_DELAYS, None):
+        try:
+            return fn()
+        except WindError:
+            raise  # a permanent problem (unexpected file layout), waiting will not help
+        except Exception as exc:  # noqa: BLE001 - the caller decides what a final failure means
+            if delay is None or (deadline is not None and time.monotonic() + delay > deadline):
+                raise
+            print(f"ECMWF {what}: {type(exc).__name__}: {str(exc)[:160]}; retrying in {delay} s", flush=True)
+            time.sleep(delay)
+
+
 def _exists(s3, key: str) -> bool:
     from botocore.exceptions import ClientError
 
-    try:
-        s3.head_object(Bucket=BUCKET, Key=key)
-        return True
-    except ClientError as exc:
-        if exc.response["Error"]["Code"] in ("404", "403", "NoSuchKey", "NotFound"):
-            return False
-        raise
+    def head() -> bool:
+        try:
+            s3.head_object(Bucket=BUCKET, Key=key)
+            return True
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] in ("404", "403", "NoSuchKey", "NotFound"):
+                return False
+            raise
+
+    return _retry(f"existence check of {key.rsplit('/', 1)[-1]}", head)
 
 
-def find_run(s3, scan: dt.datetime):
-    """Newest published run whose start is not after ``scan``; returns (init, step_lo, step_hi)."""
+def candidate_runs(s3, scan: dt.datetime):
+    """Yield (init, step_lo, step_hi) for each published run whose start is not after ``scan``, newest first."""
     init = scan.replace(hour=scan.hour // RUN_HOURS * RUN_HOURS, minute=0, second=0, microsecond=0)
     for _ in range(MAX_RUNS_BACK):
         hours = (scan - init).total_seconds() / 3600
@@ -72,8 +104,14 @@ def find_run(s3, scan: dt.datetime):
         if hi <= MAX_STEP and all(
             _exists(s3, _key(init, s, ext)) for s in {lo, hi} for ext in ("grib2", "index")
         ):
-            return init, lo, hi
+            yield init, lo, hi
         init -= dt.timedelta(hours=RUN_HOURS)
+
+
+def find_run(s3, scan: dt.datetime):
+    """Newest published run whose start is not after ``scan``; returns (init, step_lo, step_hi)."""
+    for run in candidate_runs(s3, scan):
+        return run
     raise WindError(
         f"no published ECMWF open-data run found within {MAX_RUNS_BACK * RUN_HOURS} h before "
         f"{scan:%Y-%m-%d %H:%M} UTC in s3://{BUCKET}/"
@@ -148,27 +186,48 @@ def _decode(data: bytes, bbox, margin: float):
 
 
 def fetch_winds(s3, scan: dt.datetime, level: int, bbox, margin: float = 1.0) -> WindField:
-    """Winds at ``level`` hPa linearly interpolated in time to ``scan`` (UTC)."""
+    """Winds at ``level`` hPa linearly interpolated in time to ``scan`` (UTC).
+
+    The newest published run is used. Each download is retried (the open-data bucket throttles with 'SlowDown',
+    especially just after a new run appears; observed in bursts that affect every run); if it still fails, the
+    previous run is tried, up to MAX_RUNS_TRIED. The whole attempt is limited to about WIND_BUDGET_S seconds.
+    """
     import numpy as np
 
     if level not in PRESSURE_LEVELS:
         raise WindError(f"wind level must be one of {PRESSURE_LEVELS}, got {level}")
-    init, lo, hi = find_run(s3, scan)
-    valid_lo = init + dt.timedelta(hours=lo)
-    weight = 0.0 if hi == lo else (scan - valid_lo).total_seconds() / (STEP_HOURS * 3600)
-
-    stacks = []
-    for step in sorted({lo, hi}):
-        fields, lon, lat = _decode(_fetch_messages(s3, init, step, level), bbox, margin)
-        stacks.append(fields)
-    a, b = stacks[0], stacks[-1]
-    mix = lambda k: (1 - weight) * a[k] + weight * b[k]  # noqa: E731
-    sp = np.minimum(a["sp"], b["sp"])  # mask if either bracketing step is underground
-    return WindField(
-        lon=lon, lat=lat, u=mix("u"), v=mix("v"),
-        below_ground=sp < level * 100.0,
-        level=level, init=init, step_lo=lo, step_hi=hi,
-    )
+    failures: list[str] = []
+    deadline = time.monotonic() + WIND_BUDGET_S
+    for init, lo, hi in candidate_runs(s3, scan):
+        if len(failures) >= MAX_RUNS_TRIED or (failures and time.monotonic() > deadline):
+            break
+        try:
+            stacks = []
+            for step in sorted({lo, hi}):
+                fields, lon, lat = _retry(
+                    f"download of run {init:%d %b %HZ} step {step} h",
+                    lambda step=step: _decode(_fetch_messages(s3, init, step, level), bbox, margin),
+                    deadline,
+                )
+                stacks.append(fields)
+        except Exception as exc:  # noqa: BLE001 - try the previous run
+            failures.append(f"run {init:%d %b %HZ}: {type(exc).__name__}: {str(exc)[:200]}")
+            _note(f"ECMWF run {init:%d %b %HZ} could not be fetched ({failures[-1].split(': ', 1)[1]}); "
+                  "trying the previous run")
+            continue
+        weight = 0.0 if hi == lo else (scan - (init + dt.timedelta(hours=lo))).total_seconds() / (STEP_HOURS * 3600)
+        a, b = stacks[0], stacks[-1]
+        mix = lambda k: (1 - weight) * a[k] + weight * b[k]  # noqa: E731
+        sp = np.minimum(a["sp"], b["sp"])  # mask if either bracketing step is underground
+        return WindField(
+            lon=lon, lat=lat, u=mix("u"), v=mix("v"),
+            below_ground=sp < level * 100.0,
+            level=level, init=init, step_lo=lo, step_hi=hi,
+            note=f"newest run unavailable, used an older one: {'; '.join(failures)}" if failures else "",
+        )
+    raise WindError("; ".join(failures) if failures else
+                    f"no published ECMWF open-data run found within {MAX_RUNS_BACK * RUN_HOURS} h before "
+                    f"{scan:%Y-%m-%d %H:%M} UTC in s3://{BUCKET}/")
 
 
 # --------------------------------------------------------------------------- drawing

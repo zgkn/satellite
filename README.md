@@ -210,6 +210,11 @@ u, v and surface-pressure messages are fetched with byte-range requests, ~2 MB p
   scan that is a run from roughly 6-12 h earlier (publication lag); for an older scan it is a run just before it, so the
   forecast step is short. Winds are linearly interpolated in time between the two 3-hourly steps that bracket the
   scan time. The caption line shows the run and steps used, e.g. `run 21 Oct 00Z, +0/+3 h`.
+- **Throttling and fallback:** the ECMWF bucket sometimes answers `SlowDown` (it throttles in bursts, most often around the
+  times new runs appear, and it can hit every run at once). Each download is retried after 10, 30 and 60 s; if the newest
+  run still fails, the previous run is tried; the whole attempt is limited to about 4 min. If winds still cannot be fetched
+  the images are published without streamlines, as before, and the job summary says so with a warning line (plus a
+  warning when an older run had to be used, with the reason on the Winds line).
 - **Mountains:** where 925 hPa (~750 m) is below the ground (parts of the Barisan range, Borneo highlands) the model
   values are extrapolated, so streamlines are left out there instead of showing made-up winds.
 - **Look:** orange lines with a faint dark edge, about 1-2 px wide (stronger wind = slightly thicker), about 45 px

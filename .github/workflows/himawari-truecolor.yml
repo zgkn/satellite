@@ -248,6 +248,8 @@ jobs:
                 echo "**Sun zenith at bbox centre:** $(jq -r .sun_zenith_centre $r)°  "
                 echo "**Segments:** $(jq -r '.segments | map(tostring) | join(",")' $r), bands $(jq -r '.bands | join("/")' $r) (all files present)  "
                 echo "**Winds:** $(jq -r '.winds // "n/a"' $r)  "
+                if jq -e '(.winds // "") | startswith("skipped")' $r >/dev/null; then echo "**:warning: Wind streamlines were skipped** - the images below have none (reason on the Winds line)  "; fi
+                if jq -e '(.winds // "") | contains("[newest run unavailable")' $r >/dev/null; then echo "**:warning: Winds are from an older ECMWF run** than the newest (reason on the Winds line)  "; fi
                 if [ -n "$(jq -r '.low_sun // empty' $r)" ]; then echo "**:warning: Low sun:** $(jq -r .low_sun $r)"; fi
                 if [ -n "$(jq -r '.skipped_products // empty | join(", ")' $r)" ]; then echo "**Night:** skipped $(jq -r '.skipped_products | join(", ")' $r) (daytime only); only the products below were made.  "; fi
                 echo

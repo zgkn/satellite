@@ -922,8 +922,10 @@ def run(args) -> dict:
             # The satellite images are the main product: a wind problem must not lose them.
             try:
                 wind = ecmwf_winds.fetch_winds(s3, scan, args.wind_level, bbox)
-                result["winds"] = wind.describe()
-                log(f"Winds: {wind.describe()}")
+                result["winds"] = wind.describe() + (f" [{wind.note}]" if wind.note else "")
+                log(f"Winds: {result['winds']}")
+                if wind.note:
+                    annotate("warning", f"Wind streamlines use an older ECMWF run: {wind.note}")
             except Exception as exc:  # noqa: BLE001 - deliberately broad, see above
                 result["winds"] = f"skipped: {exc}"
                 annotate("warning", f"Wind streamlines skipped ({type(exc).__name__}: {exc}); "

@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import html
+import json
 import re
 import sys
 from pathlib import Path
@@ -113,6 +114,66 @@ def make_thumbs(folder: Path, names: list[str]) -> None:
             im.save(dest, quality=82, optimize=True)
 
 
+COMPARE_CSS = """
+section.compare { margin-top:32px; scroll-margin-top:12px; }
+.cmp-controls { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:end; margin:8px 0 12px; }
+.cmp-controls label { display:flex; flex-direction:column; gap:2px; font-size:.8rem; color:var(--muted); }
+.cmp-controls select { font:inherit; font-size:.95rem; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); max-width:100%; }
+.cmp-frame { position:relative; margin:0 auto; background:#000; border:1px solid var(--line); border-radius:10px; overflow:hidden; user-select:none; -webkit-user-select:none; }
+.cmp-frame img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; }
+.cmp-frame .cmp-left { clip-path:inset(0 var(--cmp-right,50%) 0 0); }
+.cmp-bar { position:absolute; top:0; bottom:0; left:var(--cmp-pos,50%); width:0; border-left:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.45); pointer-events:none; }
+.cmp-bar::after { content:"\\2194"; position:absolute; top:50%; left:-19px; width:36px; height:36px; margin-top:-18px; border-radius:50%; background:#fff; color:#111; font-size:20px; line-height:36px; text-align:center; box-shadow:0 1px 6px rgba(0,0,0,.6); }
+.cmp-frame input[type=range] { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:ew-resize; touch-action:pan-y; }
+.cmp-tag { position:absolute; top:8px; padding:3px 9px; border-radius:999px; background:rgba(0,0,0,.6); color:#fff; font-size:.8rem; pointer-events:none; }
+.cmp-tag.l { left:8px; } .cmp-tag.r { right:8px; }
+.cmp-msg { color:var(--muted); font-size:.9rem; margin:6px 0 0; }
+"""
+
+COMPARE_JS = """
+document.querySelectorAll("section.compare").forEach(function (box) {
+  var data = JSON.parse(box.querySelector("script.cmp-data").textContent);
+  var left = box.querySelector(".cmp-p-left"), right = box.querySelector(".cmp-p-right"), scan = box.querySelector(".cmp-scan");
+  var frame = box.querySelector(".cmp-frame"), imgL = frame.querySelector(".cmp-left"), imgR = frame.querySelector(".cmp-right");
+  var range = frame.querySelector("input"), tagL = frame.querySelector(".l"), tagR = frame.querySelector(".r");
+  var msg = box.querySelector(".cmp-msg"), started = false;
+  var byId = {}; data.products.forEach(function (p) { byId[p.id] = p; });
+  data.products.forEach(function (p) {
+    [left, right].forEach(function (sel) { var o = document.createElement("option"); o.value = p.id; o.textContent = p.title; sel.appendChild(o); });
+  });
+  left.value = data.defaults[0]; right.value = data.defaults[1];
+  function common() {
+    var a = byId[left.value], b = byId[right.value], set = {};
+    b.scans.forEach(function (s) { set[s.name] = 1; });
+    return a.scans.filter(function (s) { return set[s.name]; });
+  }
+  function fill() {
+    var keep = scan.value, list = common();
+    scan.innerHTML = "";
+    list.forEach(function (s) { var o = document.createElement("option"); o.value = s.name; o.textContent = s.label; scan.appendChild(o); });
+    if (list.some(function (s) { return s.name === keep; })) scan.value = keep;
+    msg.textContent = list.length ? "" : "No scan has both products (the other products are daytime only).";
+    frame.style.display = list.length ? "" : "none";
+  }
+  function url(p) { return (p.prefix ? p.prefix + "/" : "") + scan.value + ".png"; }
+  function show() {
+    if (!started || !scan.value) return;
+    imgL.src = url(byId[left.value]); imgR.src = url(byId[right.value]);
+    tagL.textContent = byId[left.value].title; tagR.textContent = byId[right.value].title;
+    imgL.alt = byId[left.value].title; imgR.alt = byId[right.value].title;
+  }
+  function move() { frame.style.setProperty("--cmp-pos", range.value + "%"); frame.style.setProperty("--cmp-right", (100 - range.value) + "%"); }
+  [left, right].forEach(function (sel) { sel.addEventListener("change", function () { fill(); show(); }); });
+  scan.addEventListener("change", show);
+  range.addEventListener("input", move);
+  fill(); move();
+  function start() { if (!started) { started = true; show(); } }
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(function (es, ob) { if (es.some(function (e) { return e.isIntersecting; })) { start(); ob.disconnect(); } }).observe(frame);
+  } else { start(); }
+});
+"""
+
 PAGE = """<!doctype html>
 <html lang="en">
 <head>
@@ -162,6 +223,7 @@ p.note {{ margin:4px 0 0; color:var(--muted); font-size:.85rem; }}
 .js section.region:not(.active) {{ display:none; }}
 section.region + section.region {{ margin-top:40px; border-top:1px solid var(--line); padding-top:8px; }}
 .grid small {{ display:block; padding:6px 8px; color:var(--muted); font-size:.78rem; line-height:1.3; }}
+{compare_css}
 footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 </style>
 </head>
@@ -179,6 +241,7 @@ footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 </footer>
 </main>
 <script>
+{compare_js}
 (function () {{
   var regions = document.querySelectorAll("section.region");
   if (regions.length < 2) return;
@@ -254,10 +317,41 @@ def section_html(sec: dict, folder: Path, names: list[str], rel: str, sec_id: st
 </section>"""
 
 
+def compare_html(reg: dict, entries: list, sec_id: str) -> str:
+    """Before/after slider for the products of one region: ``entries`` = [(sec, folder, rel, names)]."""
+    products = []
+    for sec, _, rel, names, _size in entries:
+        products.append(dict(id=sec["key"], title=sec["title"], prefix=rel, scans=[
+            dict(name=n[:-4], label=" / ".join(fmt(scan_time(n))[::-1])) for n in names]))
+    ids = [p["id"] for p in products]
+    defaults = [ids[0], ids[1] if len(ids) > 1 else ids[0]]
+    if "ir" in ids and "truecolor" in ids:
+        defaults = ["truecolor", "ir"]
+    width, height = entries[0][4]
+    payload = json.dumps(dict(products=products, defaults=defaults)).replace("</", "<\\/")
+    return f"""<section class="compare" id="{sec_id}">
+<h2>Compare</h2>
+<p class="blurb">Drag the handle (or use the arrow keys) to compare two products for the same scan.</p>
+<div class="cmp-controls">
+  <label>Left<select class="cmp-p-left"></select></label>
+  <label>Right<select class="cmp-p-right"></select></label>
+  <label>Scan (SGT / UTC)<select class="cmp-scan"></select></label>
+</div>
+<div class="cmp-frame" style="aspect-ratio:{width}/{height}; max-width:min(100%, calc(88vh * {width} / {height}));">
+  <img class="cmp-right" alt="" decoding="async"><img class="cmp-left" alt="" decoding="async">
+  <div class="cmp-bar"></div>
+  <span class="cmp-tag l"></span><span class="cmp-tag r"></span>
+  <input type="range" min="0" max="100" value="50" step="0.1" aria-label="Comparison position">
+</div>
+<p class="cmp-msg"></p>
+<script type="application/json" class="cmp-data">{payload}</script>
+</section>"""
+
+
 def build(root: Path) -> None:
     regions, summary = [], []
     for reg in REGION_TABS:
-        sections, parts = [], []
+        sections, parts, compare_entries = [], [], []
         for sec in SECTIONS:
             rel = "/".join(p for p in (reg["dir"], sec["subdir"]) if p)
             folder = root / rel if rel else root
@@ -266,16 +360,25 @@ def build(root: Path) -> None:
             if not names:
                 continue
             make_thumbs(folder, names)
+            with Image.open(folder / names[0]) as im:
+                size = im.size
             sections.append((sec, names))
+            compare_entries.append((sec, folder, rel, names, size))
             # the first region keeps the original section ids (#truecolor ...), the others are prefixed
             sec_id = sec["key"] if not reg["dir"] else f"{reg['key']}-{sec['key']}"
             parts.append(section_html(sec, folder, names, rel, sec_id))
             summary.append(f"{reg['key']} {sec['title']}: {len(names)} scans (newest {names[0][:-4]})")
+        if len(compare_entries) > 1:  # a slider needs two products
+            cmp_id = "compare" if not reg["dir"] else f"{reg['key']}-compare"
+            parts.append(compare_html(reg, [(a, b, c, d, e) for a, b, c, d, e in compare_entries], cmp_id))
         if parts:
             nav = ""
             if len(sections) > 1:
                 ids = [s_["key"] if not reg["dir"] else f"{reg['key']}-{s_['key']}" for s_, _ in sections]
-                nav = "<nav>" + "".join(f'<a href="#{i}">{s_["title"]}</a>' for i, (s_, _) in zip(ids, sections)) + "</nav>"
+                links = [(i, s_["title"]) for i, (s_, _) in zip(ids, sections)]
+                if len(compare_entries) > 1:
+                    links.append((cmp_id, "Compare"))
+                nav = "<nav>" + "".join(f'<a href="#{i}">{t}</a>' for i, t in links) + "</nav>"
             regions.append((reg, f'<section class="region" data-region="{reg["key"]}">\n'
                                  f'<p class="sub">{reg["sub"]}</p>\n{nav}\n' + "\n".join(parts) + "\n</section>"))
     if not regions:
@@ -288,6 +391,7 @@ def build(root: Path) -> None:
             for r, _ in regions) + "</div>")
     (root / "index.html").write_text(
         PAGE.format(tabs=tabs, body="\n".join(html_ for _, html_ in regions),
+                    compare_css=COMPARE_CSS, compare_js=COMPARE_JS,
                     built=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"))
     )
     (root / ".nojekyll").write_text("")  # serve files as-is, skip Jekyll

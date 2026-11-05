@@ -67,8 +67,11 @@ to redeploy). Note that Pages sites are public, and on a private repository Page
 **Compare slider.** Each region tab ends with a *Compare* section: a before/after slider for two products of the same
 scan. Choose the left and right product (True Color, IR Enhanced, Day Fire; it starts as True Color vs IR Enhanced) and a scan
 time from the dropdowns; the time list holds the scans that exist for both products (kept images, last 2 days; at night only
-IR Enhanced exists, so no pair is offered then). Drag the handle or use the arrow keys. The two full-size PNGs (about 6 MB
-each) load only when the slider scrolls into view.
+IR Enhanced exists, so no pair is offered then). Drag the round handle or use the arrow keys to move the divider. **Zoom** 1× to 8×
+with the +/− buttons, Ctrl (⌘) + scroll, a trackpad or two-finger pinch, or double-click; both images zoom together and the divider
+stays put. When zoomed, drag the picture to pan (the handle still moves the divider; at 1× dragging anywhere moves it). Past
+4× the real satellite pixels are drawn as sharp squares. Plain scrolling is not captured, so the page still scrolls. The two
+full-size PNGs (about 6 MB each) load only when the slider scrolls into view.
 
 ### Inputs
 

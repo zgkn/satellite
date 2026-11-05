@@ -119,15 +119,27 @@ section.compare { margin-top:32px; scroll-margin-top:12px; }
 .cmp-controls { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:end; margin:8px 0 12px; }
 .cmp-controls label { display:flex; flex-direction:column; gap:2px; font-size:.8rem; color:var(--muted); }
 .cmp-controls select { font:inherit; font-size:.95rem; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); max-width:100%; }
-.cmp-frame { position:relative; margin:0 auto; background:#000; border:1px solid var(--line); border-radius:10px; overflow:hidden; user-select:none; -webkit-user-select:none; }
-.cmp-frame img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; }
-.cmp-frame .cmp-left { clip-path:inset(0 var(--cmp-right,50%) 0 0); }
+.cmp-zoom { display:flex; align-items:center; gap:6px; margin-left:auto; }
+.cmp-zoom button { font:inherit; min-width:36px; height:34px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); cursor:pointer; }
+.cmp-zoom button:hover, .cmp-zoom button:focus-visible { border-color:var(--accent); }
+.cmp-zoom .cmp-zl { min-width:3ch; text-align:center; font-size:.9rem; color:var(--muted); }
+.cmp-frame { position:relative; margin:0 auto; background:#000; border:1px solid var(--line); border-radius:10px; overflow:hidden; user-select:none; -webkit-user-select:none; touch-action:pan-y; }
+.cmp-frame.zoomed { touch-action:none; cursor:grab; }
+.cmp-frame.panning { cursor:grabbing; }
+.cmp-layer { position:absolute; inset:0; overflow:hidden; }
+.cmp-layer.l { clip-path:inset(0 var(--cmp-right,50%) 0 0); }
+.cmp-stage { position:absolute; inset:0; transform-origin:0 0; will-change:transform; }
+.cmp-stage img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; }
+.cmp-frame.crisp .cmp-stage img { image-rendering:pixelated; }
 .cmp-bar { position:absolute; top:0; bottom:0; left:var(--cmp-pos,50%); width:0; border-left:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.45); pointer-events:none; }
 .cmp-bar::after { content:"\\2194"; position:absolute; top:50%; left:-19px; width:36px; height:36px; margin-top:-18px; border-radius:50%; background:#fff; color:#111; font-size:20px; line-height:36px; text-align:center; box-shadow:0 1px 6px rgba(0,0,0,.6); }
-.cmp-frame input[type=range] { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:ew-resize; touch-action:pan-y; }
-.cmp-tag { position:absolute; top:8px; padding:3px 9px; border-radius:999px; background:rgba(0,0,0,.6); color:#fff; font-size:.8rem; pointer-events:none; }
+.cmp-grab { position:absolute; top:0; bottom:0; left:-22px; width:44px; cursor:ew-resize; pointer-events:auto; touch-action:none; }
+.cmp-frame:focus-within .cmp-bar::after { outline:3px solid var(--accent); }
+.cmp-kbd { position:absolute; left:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none; }
+.cmp-tag { position:absolute; top:8px; padding:3px 9px; border-radius:999px; background:rgba(0,0,0,.6); color:#fff; font-size:.8rem; pointer-events:none; z-index:2; }
 .cmp-tag.l { left:8px; } .cmp-tag.r { right:8px; }
 .cmp-msg { color:var(--muted); font-size:.9rem; margin:6px 0 0; }
+.cmp-hint { color:var(--muted); font-size:.8rem; margin:6px 0 0; }
 """
 
 COMPARE_JS = """
@@ -135,8 +147,10 @@ document.querySelectorAll("section.compare").forEach(function (box) {
   var data = JSON.parse(box.querySelector("script.cmp-data").textContent);
   var left = box.querySelector(".cmp-p-left"), right = box.querySelector(".cmp-p-right"), scan = box.querySelector(".cmp-scan");
   var frame = box.querySelector(".cmp-frame"), imgL = frame.querySelector(".cmp-left"), imgR = frame.querySelector(".cmp-right");
-  var range = frame.querySelector("input"), tagL = frame.querySelector(".l"), tagR = frame.querySelector(".r");
-  var msg = box.querySelector(".cmp-msg"), started = false;
+  var stages = frame.querySelectorAll(".cmp-stage"), range = frame.querySelector("input"), grab = frame.querySelector(".cmp-grab");
+  var tagL = frame.querySelector(".l.cmp-tag"), tagR = frame.querySelector(".r.cmp-tag");
+  var zl = box.querySelector(".cmp-zl"), msg = box.querySelector(".cmp-msg"), started = false;
+  var Z_MAX = 8, CRISP_AT = 4, z = 1, tx = 0, ty = 0, pos = 50;
   var byId = {}; data.products.forEach(function (p) { byId[p.id] = p; });
   data.products.forEach(function (p) {
     [left, right].forEach(function (sel) { var o = document.createElement("option"); o.value = p.id; o.textContent = p.title; sel.appendChild(o); });
@@ -162,11 +176,78 @@ document.querySelectorAll("section.compare").forEach(function (box) {
     tagL.textContent = byId[left.value].title; tagR.textContent = byId[right.value].title;
     imgL.alt = byId[left.value].title; imgR.alt = byId[right.value].title;
   }
-  function move() { frame.style.setProperty("--cmp-pos", range.value + "%"); frame.style.setProperty("--cmp-right", (100 - range.value) + "%"); }
+  function setPos(p) {
+    pos = Math.max(0, Math.min(100, p));
+    frame.style.setProperty("--cmp-pos", pos + "%"); frame.style.setProperty("--cmp-right", (100 - pos) + "%");
+    range.value = Math.round(pos);
+  }
+  function apply() {
+    var w = frame.clientWidth, h = frame.clientHeight;
+    z = Math.max(1, Math.min(Z_MAX, z));
+    tx = Math.min(0, Math.max(w - w * z, tx)); ty = Math.min(0, Math.max(h - h * z, ty));
+    var t = "translate(" + tx + "px," + ty + "px) scale(" + z + ")";
+    stages.forEach(function (st) { st.style.transform = t; });
+    frame.classList.toggle("zoomed", z > 1); frame.classList.toggle("crisp", z >= CRISP_AT);
+    zl.textContent = (Math.round(z * 10) / 10) + "\\u00d7";
+  }
+  function zoomAt(nz, px, py) {   // keep the picture point under (px, py) fixed
+    nz = Math.max(1, Math.min(Z_MAX, nz));
+    tx = px - (px - tx) * nz / z; ty = py - (py - ty) * nz / z; z = nz; apply();
+  }
+  function local(e) { var r = frame.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top, r]; }
+  var ptrs = {}, mode = null, pan0 = null, pinch0 = null;
+  function nPtrs() { return Object.keys(ptrs).length; }
+  function startPan(e) { var l = local(e); pan0 = { x: l[0], y: l[1], tx: tx, ty: ty }; mode = "pan"; frame.classList.add("panning"); }
+  frame.addEventListener("pointerdown", function (e) {
+    if (e.button > 0) return;
+    ptrs[e.pointerId] = e; try { frame.setPointerCapture(e.pointerId); } catch (x) {}
+    if (nPtrs() === 2) {
+      var k = Object.keys(ptrs), a = ptrs[k[0]], b = ptrs[k[1]], r = frame.getBoundingClientRect();
+      pinch0 = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1, z: z, mx: (a.clientX + b.clientX) / 2 - r.left, my: (a.clientY + b.clientY) / 2 - r.top, tx: tx, ty: ty };
+      mode = "pinch"; frame.classList.remove("panning"); return;
+    }
+    if (e.target === grab || z === 1) { mode = "divider"; var l = local(e); setPos(l[0] / l[2].width * 100); }
+    else startPan(e);
+    e.preventDefault();
+  });
+  frame.addEventListener("pointermove", function (e) {
+    if (!ptrs[e.pointerId]) return;
+    ptrs[e.pointerId] = e;
+    if (mode === "divider") { var l = local(e); setPos(l[0] / l[2].width * 100); }
+    else if (mode === "pan" && pan0) { var m = local(e); tx = pan0.tx + (m[0] - pan0.x); ty = pan0.ty + (m[1] - pan0.y); apply(); }
+    else if (mode === "pinch" && pinch0) {
+      var k = Object.keys(ptrs), a = ptrs[k[0]], b = ptrs[k[1]], r = frame.getBoundingClientRect();
+      var d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
+      var nz = Math.max(1, Math.min(Z_MAX, pinch0.z * d / pinch0.d));
+      tx = pinch0.mx - (pinch0.mx - pinch0.tx) * nz / pinch0.z; ty = pinch0.my - (pinch0.my - pinch0.ty) * nz / pinch0.z; z = nz;
+      var mx = (a.clientX + b.clientX) / 2 - r.left, my = (a.clientY + b.clientY) / 2 - r.top;
+      tx += mx - pinch0.mx; ty += my - pinch0.my; apply();
+    }
+  });
+  function release(e) {
+    delete ptrs[e.pointerId]; frame.classList.remove("panning");
+    if (nPtrs() === 1 && z > 1) { var k = Object.keys(ptrs); startPan(ptrs[k[0]]); } else { mode = null; pan0 = null; pinch0 = null; }
+  }
+  frame.addEventListener("pointerup", release); frame.addEventListener("pointercancel", release);
+  frame.addEventListener("dblclick", function (e) {
+    if (e.target === grab) return;
+    var l = local(e); if (z >= Z_MAX) { z = 1; tx = ty = 0; apply(); } else zoomAt(z * 2, l[0], l[1]);
+  });
+  frame.addEventListener("wheel", function (e) {   // Ctrl/Cmd + wheel, or a trackpad pinch (which sends Ctrl + wheel)
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault(); var l = local(e); zoomAt(z * Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0025)), l[0], l[1]);
+  }, { passive: false });
+  box.querySelectorAll(".cmp-zoom button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var w = frame.clientWidth, h = frame.clientHeight, a = btn.dataset.z;
+      if (a === "reset") { z = 1; tx = ty = 0; apply(); } else zoomAt(a === "in" ? z * 1.5 : z / 1.5, w / 2, h / 2);
+    });
+  });
   [left, right].forEach(function (sel) { sel.addEventListener("change", function () { fill(); show(); }); });
   scan.addEventListener("change", show);
-  range.addEventListener("input", move);
-  fill(); move();
+  range.addEventListener("input", function () { setPos(+range.value); });
+  window.addEventListener("resize", apply);
+  fill(); setPos(50); apply();
   function start() { if (!started) { started = true; show(); } }
   if ("IntersectionObserver" in window) {
     new IntersectionObserver(function (es, ob) { if (es.some(function (e) { return e.isIntersecting; })) { start(); ob.disconnect(); } }).observe(frame);
@@ -331,19 +412,27 @@ def compare_html(reg: dict, entries: list, sec_id: str) -> str:
     payload = json.dumps(dict(products=products, defaults=defaults)).replace("</", "<\\/")
     return f"""<section class="compare" id="{sec_id}">
 <h2>Compare</h2>
-<p class="blurb">Drag the handle (or use the arrow keys) to compare two products for the same scan.</p>
+<p class="blurb">Compare two products for the same scan: drag the round handle (or use the arrow keys) to move the divider.</p>
 <div class="cmp-controls">
   <label>Left<select class="cmp-p-left"></select></label>
   <label>Right<select class="cmp-p-right"></select></label>
   <label>Scan (SGT / UTC)<select class="cmp-scan"></select></label>
+  <div class="cmp-zoom" role="group" aria-label="Zoom">
+    <button type="button" data-z="out" aria-label="Zoom out">&minus;</button>
+    <span class="cmp-zl" aria-live="polite">1&times;</span>
+    <button type="button" data-z="in" aria-label="Zoom in">+</button>
+    <button type="button" data-z="reset">Reset</button>
+  </div>
 </div>
 <div class="cmp-frame" style="aspect-ratio:{width}/{height}; max-width:min(100%, calc(88vh * {width} / {height}));">
-  <img class="cmp-right" alt="" decoding="async"><img class="cmp-left" alt="" decoding="async">
-  <div class="cmp-bar"></div>
+  <div class="cmp-layer r"><div class="cmp-stage"><img class="cmp-right" alt="" decoding="async"></div></div>
+  <div class="cmp-layer l"><div class="cmp-stage"><img class="cmp-left" alt="" decoding="async"></div></div>
+  <div class="cmp-bar"><div class="cmp-grab"></div></div>
   <span class="cmp-tag l"></span><span class="cmp-tag r"></span>
-  <input type="range" min="0" max="100" value="50" step="0.1" aria-label="Comparison position">
+  <input class="cmp-kbd" type="range" min="0" max="100" value="50" step="1" aria-label="Comparison position">
 </div>
 <p class="cmp-msg"></p>
+<p class="cmp-hint">Zoom with the + / &minus; buttons, Ctrl (or &#8984;) + scroll, a trackpad or two-finger pinch, or double-click; drag the picture to pan when zoomed. Past 4&times; the real satellite pixels are shown.</p>
 <script type="application/json" class="cmp-data">{payload}</script>
 </section>"""
 

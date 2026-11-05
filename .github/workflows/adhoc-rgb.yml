@@ -2,9 +2,9 @@ name: Himawari ad-hoc True Color + Ash RGB
 
 # Separate from the operational "Himawari RGB" workflow: nothing here touches himawari-output, its images,
 # its housekeeping or its site. Builds a True Color and/or a volcanic Ash RGB (JMA quick guide) image of one scan over
-# a box, with only a timestamp drawn on it. Results go to the artifact and to the orphan branch himawari-adhoc
+# a box, with only coastlines and a timestamp drawn on it. Results go to the artifact and to the orphan branch himawari-adhoc
 # (folder adhoc-rgb/, earlier files kept). Manual only.
-# Defaults: the Anak Krakatau eruption, 5 Sep 2026 08:00 UTC, Sunda Strait box.
+# Defaults: the Anak Krakatau eruption, 5 Sep 2026 08:00 UTC, Sunda Strait box (a little west of the volcano).
 on:
   workflow_dispatch:
     inputs:
@@ -16,7 +16,7 @@ on:
       bbox:
         description: "Box west,south,east,north in degrees (segments 5-6 cover about 10N to 10S)"
         required: false
-        default: "103.0,-9.5,108.5,-3.0"
+        default: "101.0,-9.5,106.5,-3.0"
         type: string
       products:
         description: "Which images: true_color,ash (comma list)"
@@ -43,6 +43,11 @@ on:
         type: string
       rayleigh:
         description: "Apply Rayleigh correction to True Color (as the operational product does)"
+        required: false
+        default: true
+        type: boolean
+      coastlines:
+        description: "Draw coastlines (green on True Color, magenta on Ash); untick for bare images"
         required: false
         default: true
         type: boolean
@@ -93,9 +98,11 @@ jobs:
           IN_GREEN: ${{ inputs.green }}
           IN_SMOOTH: ${{ inputs.smooth }}
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
+          IN_COASTLINES: ${{ inputs.coastlines }}
         run: |
           args=(--scan "$IN_SCAN" --bbox "$IN_BBOX" --products "$IN_PRODUCTS" --resolution "$IN_RES" --green "$IN_GREEN" --smooth "$IN_SMOOTH" --outdir output-adhoc-rgb)
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
+          if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
           python scripts/adhoc_rgb.py "${args[@]}"
 
       - name: Upload PNG artifact

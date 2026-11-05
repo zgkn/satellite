@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Ad-hoc True Color and Ash RGB images of one Himawari-9 scan over a box, with only a timestamp on them.
+"""Ad-hoc True Color and Ash RGB images of one Himawari-9 scan over a box, with only coastlines and a timestamp on them.
 
 Separate from the operational pipeline: himawari_truecolor.py is imported as it is (not modified). Nothing is drawn
-on the pictures except one small timestamp line: no coastlines, graticule, streamlines, fire marks or legend.
+on the pictures except the Natural Earth coastlines (green on True Color as in the operational product, magenta on Ash
+RGB because green, red, yellow and blue all carry meaning in the Ash colour key; --no-coastlines for none) and one small
+timestamp line: no graticule, streamlines, fire marks or legend.
 
 True Color: the JMA recipe as in the operational product (Rayleigh on by default).
 Ash RGB: JMA Himawari Ash RGB Quick Guide, Ver. 1.0 (each channel scaled min..max, clipped, then ** (1/gamma)):
@@ -12,7 +14,7 @@ Ash RGB: JMA Himawari Ash RGB Quick Guide, Ver. 1.0 (each channel scaled min..ma
 The guide lists the bands in wavelength order ("B13-B15", "B11-B13"); the arithmetic used here is the longer wavelength
 minus the shorter one, which is what makes ash red (12.4 um is warmer than 10.4 um in an ash plume).
 
-    python scripts/adhoc_rgb.py --scan 202609060800 --bbox 103.0,-9.5,108.5,-3.0 --outdir out
+    python scripts/adhoc_rgb.py --scan 202609050800 --bbox 101.0,-9.5,106.5,-3.0 --outdir out
 """
 from __future__ import annotations
 
@@ -33,6 +35,7 @@ ASH = {
 }
 ASH_RED = ("B15", "B13", -3.0, 7.5, 1.0)
 ASH_BLUE = ("B13", 243.6, 303.2, 1.0)
+COAST_RGBA = {"true_color": h.PRODUCTS["true_color"]["coast_rgba"], "ash": (255, 70, 255, 255)}
 
 
 def smooth(a, sigma: float):
@@ -68,11 +71,14 @@ def make_ash(files, bbox, resolution, green: str, sigma: float):
     return np.round(out * 255.0).astype("uint8")
 
 
-def stamp(rgb, text: str, out: Path, corner: str) -> None:
-    """Save ``rgb`` with one small timestamp line in a corner; nothing else is drawn."""
+def stamp(rgb, text: str, out: Path, corner: str, coast=None) -> None:
+    """Save ``rgb`` with one small timestamp line in a corner; ``coast`` = None or (bbox, resolution, width_px, rgba)
+    adds the coastlines. Nothing else is drawn."""
     from PIL import Image, ImageDraw
 
     img = Image.fromarray(rgb, "RGB").convert("RGBA")
+    if coast:
+        h.draw_coastline(img, *coast)
     size = max(12, round(min(rgb.shape[0], 0.56 * rgb.shape[1]) / 48))
     font = h._font(size)
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -91,7 +97,10 @@ def stamp(rgb, text: str, out: Path, corner: str) -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scan", required=True, help="Himawari scan time YYYYMMDDHHMM (UTC)")
-    ap.add_argument("--bbox", default="103.0,-9.5,108.5,-3.0", help="west,south,east,north (default: Sunda Strait)")
+    ap.add_argument("--bbox", default="101.0,-9.5,106.5,-3.0", help="west,south,east,north (default: Sunda Strait, a little west of Anak Krakatau)")
+    ap.add_argument("--coastlines", action=argparse.BooleanOptionalAction, default=True,
+                    help="draw the Natural Earth coastlines (default on; green on True Color, magenta on Ash)")
+    ap.add_argument("--coast-width", type=float, default=1.5, help="coastline width in output pixels")
     ap.add_argument("--segments", default="5-6")
     ap.add_argument("--resolution", type=float, default=0.005)
     ap.add_argument("--products", default="true_color,ash", help="comma list of true_color, ash")
@@ -148,7 +157,8 @@ def main(argv=None) -> int:
                 h.log(f"--- Ash RGB (JMA quick guide), green = {args.green}, smoothing sigma {args.smooth:g} px")
                 rgb = make_ash(files, bbox, args.resolution, args.green, args.smooth)
             png = out / f"{scan:%Y%m%d_%H%M}_{name}.png"
-            stamp(rgb, text, png, args.corner)
+            stamp(rgb, text, png, args.corner,
+                  (bbox, args.resolution, args.coast_width, COAST_RGBA[name]) if args.coastlines else None)
             h.log(f"Wrote {png} ({png.stat().st_size / 1e6:.1f} MB, {rgb.shape[1]}x{rgb.shape[0]})")
     finally:
         shutil.rmtree(work, ignore_errors=True)

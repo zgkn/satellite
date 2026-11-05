@@ -1,0 +1,138 @@
+name: Himawari ad-hoc True Color + Ash RGB
+
+# Separate from the operational "Himawari RGB" workflow: nothing here touches himawari-output, its images,
+# its housekeeping or its site. Builds a True Color and/or a volcanic Ash RGB (JMA quick guide) image of one scan over
+# a box, with only a timestamp drawn on it. Results go to the artifact and to the orphan branch himawari-adhoc
+# (folder adhoc-rgb/, earlier files kept). Manual only.
+# Defaults: the Anak Krakatau eruption, 5 Sep 2026 08:00 UTC, Sunda Strait box.
+on:
+  workflow_dispatch:
+    inputs:
+      scan_utc:
+        description: "Himawari scan time UTC as YYYYMMDDHHMM (minute ends in 0)"
+        required: false
+        default: "202609050800"
+        type: string
+      bbox:
+        description: "Box west,south,east,north in degrees (segments 5-6 cover about 10N to 10S)"
+        required: false
+        default: "103.0,-9.5,108.5,-3.0"
+        type: string
+      products:
+        description: "Which images: true_color,ash (comma list)"
+        required: false
+        default: "true_color,ash"
+        type: string
+      resolution:
+        description: "Output pixel size in degrees (0.005 is about 0.5 km)"
+        required: false
+        default: "0.005"
+        type: string
+      green:
+        description: "Ash RGB green channel: b13 (8.6 vs 10.4 um, gamma 1.2) or b14 (8.6 vs 11.2 um, gamma 0.85)"
+        required: false
+        default: b13
+        type: choice
+        options:
+          - b13
+          - b14
+      smooth:
+        description: "Light smoothing of the 2 km infrared bands in output pixels (0 = raw blocks)"
+        required: false
+        default: "1.5"
+        type: string
+      rayleigh:
+        description: "Apply Rayleigh correction to True Color (as the operational product does)"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: himawari-adhoc
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  adhoc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ADHOC_BRANCH: himawari-adhoc
+      # Same location and cache key as the operational workflow, so the Rayleigh look-up tables are shared.
+      PSP_DATA_ROOT: ${{ github.workspace }}/.pyspectral-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Make sure bzip2 is available
+        run: command -v bzip2 >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq bzip2; }
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Cache pyspectral data (Rayleigh LUTs)
+        if: ${{ inputs.rayleigh }}
+        uses: actions/cache@v4
+        with:
+          path: .pyspectral-data
+          key: pyspectral-${{ runner.os }}-v1
+
+      - name: Build the images
+        env:
+          IN_SCAN: ${{ inputs.scan_utc }}
+          IN_BBOX: ${{ inputs.bbox }}
+          IN_PRODUCTS: ${{ inputs.products }}
+          IN_RES: ${{ inputs.resolution }}
+          IN_GREEN: ${{ inputs.green }}
+          IN_SMOOTH: ${{ inputs.smooth }}
+          IN_RAYLEIGH: ${{ inputs.rayleigh }}
+        run: |
+          args=(--scan "$IN_SCAN" --bbox "$IN_BBOX" --products "$IN_PRODUCTS" --resolution "$IN_RES" --green "$IN_GREEN" --smooth "$IN_SMOOTH" --outdir output-adhoc-rgb)
+          if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
+          python scripts/adhoc_rgb.py "${args[@]}"
+
+      - name: Upload PNG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: himawari-adhoc-rgb-${{ github.run_id }}
+          path: output-adhoc-rgb/*.png
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish to the ad-hoc branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pub="$RUNNER_TEMP/pub-adhoc-rgb"
+          rm -rf "$pub"; mkdir -p "$pub"
+          # Keep what is already on the branch (earlier ad-hoc plots and animations); only this branch is touched.
+          if git ls-remote --exit-code --heads origin "$ADHOC_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$ADHOC_BRANCH"
+            git archive FETCH_HEAD | tar -x -C "$pub"
+          fi
+          mkdir -p "$pub/adhoc-rgb"
+          cp output-adhoc-rgb/*.png "$pub/adhoc-rgb/"
+          cd "$pub"
+          git init -q -b "$ADHOC_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Ad-hoc RGB ${{ inputs.scan_utc }} (${{ inputs.products }})"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$ADHOC_BRANCH"
+
+      - name: Job summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## Himawari ad-hoc True Color + Ash RGB"
+            echo "Scan ${{ inputs.scan_utc }} UTC, box ${{ inputs.bbox }}, products ${{ inputs.products }}, Rayleigh ${{ inputs.rayleigh }}, ash green ${{ inputs.green }}, smoothing ${{ inputs.smooth }} px."
+            echo "Files on branch \`himawari-adhoc\` in \`adhoc-rgb/\`: $(ls output-adhoc-rgb 2>/dev/null | tr '\n' ' ')"
+          } >> "$GITHUB_STEP_SUMMARY"

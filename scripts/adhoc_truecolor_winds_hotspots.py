@@ -94,7 +94,9 @@ def main(argv=None) -> int:
         s3 = h.s3_client()
 
         try:
-            fields, lon, lat = ew._decode(ew._fetch_messages(s3, init, args.wind_step, args.wind_level), bbox, 1.0)
+            fields, lon, lat = ew._retry(  # the bucket throttles ("SlowDown") in bursts: wait and try again, as the operational code does
+                f"{init:%d %b %HZ} step {args.wind_step} h",
+                lambda: ew._decode(ew._fetch_messages(s3, init, args.wind_step, args.wind_level), bbox, 1.0))
         except Exception as exc:  # noqa: BLE001
             h.annotate("error", f"Could not read ECMWF run {init:%Y-%m-%d %HZ} step {args.wind_step} h: "
                        f"{type(exc).__name__}: {exc}")

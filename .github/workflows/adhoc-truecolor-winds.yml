@@ -2,24 +2,34 @@ name: Himawari ad-hoc True Color + winds
 
 # Separate from the operational "Himawari RGB" workflow: nothing here touches himawari-output, its images,
 # its housekeeping or its site. Results go to the artifact and to the orphan branch himawari-adhoc.
-# Manual only. Defaults reproduce the plot: 14 Oct 2026 08:00 UTC scan with the 14 Oct 06Z analysis winds.
+# Manual only. Defaults (this branch): 13 Oct 2026 06:00 UTC scan, 13 Oct 06Z analysis winds, high-confidence hotspots of 13 Oct.
 on:
   workflow_dispatch:
     inputs:
       scan_utc:
         description: "Himawari scan time UTC as YYYYMMDDHHMM (minute ends in 0)"
         required: false
-        default: "202610140800"
+        default: "202610130600"
         type: string
       wind_run_utc:
         description: "ECMWF IFS run YYYYMMDDHH (UTC; hour 00, 06, 12 or 18)"
         required: false
-        default: "2026101406"
+        default: "2026101306"
         type: string
       wind_step:
         description: "ECMWF forecast step in hours (0 = the run's analysis time; multiples of 3)"
         required: false
         default: "0"
+        type: string
+      hotspots_csv:
+        description: "Optional CSV of hotspots (lat, lon, frp_mw) to draw in red; empty = none"
+        required: false
+        default: "data/hotspots_highconf_20261013.csv"
+        type: string
+      hotspot_label:
+        description: "Caption text for the hotspots, e.g. 13 Oct 2026"
+        required: false
+        default: "13 Oct 2026"
         type: string
       rayleigh:
         description: "Apply Rayleigh correction (as the operational True Color does)"
@@ -70,10 +80,13 @@ jobs:
           IN_WIND_RUN: ${{ inputs.wind_run_utc }}
           IN_WIND_STEP: ${{ inputs.wind_step }}
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
+          IN_HOTSPOTS: ${{ inputs.hotspots_csv }}
+          IN_HOTSPOT_LABEL: ${{ inputs.hotspot_label }}
         run: |
           args=(--scan "$IN_SCAN" --wind-run "$IN_WIND_RUN" --wind-step "$IN_WIND_STEP" --outdir output-adhoc)
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
-          python scripts/adhoc_truecolor_winds.py "${args[@]}"
+          if [ -n "$IN_HOTSPOTS" ]; then args+=(--hotspots "$IN_HOTSPOTS" --hotspot-label "$IN_HOTSPOT_LABEL"); fi
+          python scripts/adhoc_truecolor_winds_hotspots.py "${args[@]}"
 
       - name: Upload PNG artifact
         uses: actions/upload-artifact@v4

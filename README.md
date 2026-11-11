@@ -64,13 +64,17 @@ Day Fire. To serve it, enable Pages once:
 The site is then at `https://<owner>.github.io/satellite/` and updates after every run (allow a minute or two for Pages
 to redeploy). Note that Pages sites are public, and on a private repository Pages needs a paid GitHub plan.
 
-**Time slider.** Every product section on every region tab has a slider under its main image that runs through the kept scans
-(last 2 days, oldest to newest; the position is by scan, not evenly spaced in time, and the label shows the exact SGT / UTC time).
-Drag it, use the ◀ ▶ buttons or the arrow keys, or press **Play** to loop through the scans. While scrubbing or playing it shows
-mid-size JPEG previews (`previews/` next to each folder's PNGs, 1500 px, about 0.2-0.5 MB each, made by `build_site.py` like the
-thumbnails and removed with their PNG); half a second after you stop it swaps in the full-size PNG, and Download / Open full size
-always point at the scan on screen. Each product has its own scan list (IR Enhanced also has the night scans). The first run after
-this feature appeared builds a preview for every kept image, which takes a few extra minutes once.
+**Time viewer tab.** A third tab, *Time viewer*, steps or plays through the kept scans (last 2 days) for any region and product, with zoom and
+pan. Pick the region and product from the dropdowns (the same time is kept when you change product, or the nearest earlier scan if that
+product has none then). The slider goes oldest to newest by scan, not evenly in time; the label shows the exact SGT / UTC time. Use the ◀ ▶
+buttons, the slider or the arrow keys, or **Play** (about 2.5 scans per second). **Zoom** 1× to 8× with the +/− buttons, Ctrl (⌘) + scroll, a
+trackpad or two-finger pinch, or double-click; drag the picture to pan when zoomed (plain scrolling is not captured, so the page still
+scrolls); past 4× the real satellite pixels are drawn as sharp squares. While you scrub or play it shows mid-size JPEG previews
+(`previews/` next to each folder's PNGs, 1500 px, about 0.2-0.5 MB each, built by `build_site.py` like the thumbnails and removed with their
+PNG); about half a second after you stop it loads the full-size PNG (5-7 MB) for the scan on screen and fetches its two neighbours in
+advance, so stepping at full size takes a second or two on a slow connection. Zoom and pan stay when you change scan or product. Download PNG
+always points at the scan on screen. The viewer loads nothing until its tab is opened. The product sections no longer have their own
+sliders: they show the latest image plus thumbnails, as before.
 
 **Compare slider.** Each region tab ends with a *Compare* section: a before/after slider for two products of the same
 scan. Choose the left and right product (True Color, IR Enhanced, Day Fire; it starts as True Color vs IR Enhanced) and a scan

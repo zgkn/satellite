@@ -133,56 +133,6 @@ def make_previews(folder: Path, names: list[str]) -> None:
             im.save(dest, quality=80, optimize=True)
 
 
-TIMELINE_CSS = """
-.tl { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; padding:10px 14px 12px; border-top:1px solid var(--line); }
-.tl button { font:inherit; min-width:38px; height:34px; padding:0 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); cursor:pointer; }
-.tl button:hover, .tl button:focus-visible { border-color:var(--accent); }
-.tl input[type=range] { flex:1 1 240px; min-width:140px; height:28px; accent-color:var(--accent); cursor:pointer; }
-.tl .tl-pos { color:var(--muted); font-size:.8rem; min-width:7ch; text-align:right; }
-.hero img.tl-img { transition:none; }
-"""
-
-TIMELINE_JS = """
-document.querySelectorAll(".hero[data-tl]").forEach(function (hero) {
-  var data = JSON.parse(hero.querySelector("script.tl-data").textContent), scans = data.scans, n = scans.length;
-  var img = hero.querySelector("img.tl-img"), range = hero.querySelector(".tl-range"), play = hero.querySelector(".tl-play");
-  var strong = hero.querySelector(".tl-sgt"), span = hero.querySelector(".tl-utc"), pos = hero.querySelector(".tl-pos");
-  var links = hero.querySelectorAll("a.tl-link"), idx = n - 1, timer = null, settle = null, preloaded = false;
-  function full(i) { return data.prefix + scans[i].name + ".png"; }
-  function prev(i) { return data.prefix + "previews/" + scans[i].name + ".jpg"; }
-  function label(i) {
-    strong.textContent = scans[i].sgt; span.textContent = scans[i].utc; pos.textContent = (i + 1) + " / " + n;
-    range.value = i; range.setAttribute("aria-valuetext", scans[i].sgt);
-    links.forEach(function (a) { a.href = full(i); });
-    img.alt = "Himawari-9 " + data.title + ", " + scans[i].utc;
-  }
-  function loadFull(i) {   // swap in the full-size PNG once the slider has rested
-    var im = new Image(); im.onload = function () { if (idx === i && !timer) img.src = full(i); }; im.src = full(i);
-  }
-  function show(i, quick) {
-    idx = Math.max(0, Math.min(n - 1, i)); label(idx);
-    img.src = quick ? prev(idx) : full(idx);
-    clearTimeout(settle);
-    if (quick) { new Image().src = prev(Math.min(n - 1, idx + 1)); new Image().src = prev(Math.max(0, idx - 1)); settle = setTimeout(function () { loadFull(idx); }, 500); }
-  }
-  function preloadAll() {
-    if (preloaded) return; preloaded = true; var k = 0;
-    (function next() { if (k >= n) return; var im = new Image(); im.onload = im.onerror = next; im.src = prev(k++); })();
-  }
-  function stop() { if (timer) { clearInterval(timer); timer = null; play.textContent = "\u25b6 Play"; loadFull(idx); } }
-  function start() {
-    preloadAll(); play.textContent = "\u275a\u275a Pause";
-    if (idx >= n - 1) show(0, true);
-    timer = setInterval(function () { show(idx + 1 >= n ? 0 : idx + 1, true); }, 400);
-  }
-  range.addEventListener("input", function () { stop(); preloaded || preloadAll(); show(+range.value, true); });
-  hero.querySelector(".tl-prev").addEventListener("click", function () { stop(); show(idx - 1, true); });
-  hero.querySelector(".tl-next").addEventListener("click", function () { stop(); show(idx + 1, true); });
-  play.addEventListener("click", function () { if (timer) stop(); else start(); });
-  label(idx);
-});
-"""
-
 COMPARE_CSS = """
 section.compare { margin-top:32px; scroll-margin-top:12px; }
 .cmp-controls { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:end; margin:8px 0 12px; }
@@ -324,6 +274,161 @@ document.querySelectorAll("section.compare").forEach(function (box) {
 });
 """
 
+VIEWER_CSS = """
+section.viewer h2 { margin-bottom:4px; }
+.vw-controls { display:flex; flex-wrap:wrap; align-items:end; gap:10px 14px; margin:10px 0; }
+.vw-controls label { display:flex; flex-direction:column; gap:2px; font-size:.8rem; color:var(--muted); }
+.vw-controls select { font:inherit; font-size:.95rem; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); max-width:100%; }
+.vw-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:0 0 10px; }
+.vw-row button { font:inherit; min-width:38px; height:34px; padding:0 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); cursor:pointer; }
+.vw-row button:hover, .vw-row button:focus-visible { border-color:var(--accent); }
+.vw-row input[type=range] { flex:1 1 260px; min-width:140px; height:28px; accent-color:var(--accent); cursor:pointer; }
+.vw-row .vw-pos { color:var(--muted); font-size:.8rem; min-width:7ch; text-align:right; }
+.vw-row .vw-zl { min-width:3ch; text-align:center; font-size:.9rem; color:var(--muted); }
+.vw-row .vw-sep { width:1px; height:24px; background:var(--line); margin:0 4px; }
+.vw-frame { position:relative; margin:0 auto; background:#000; border:1px solid var(--line); border-radius:10px; overflow:hidden; user-select:none; -webkit-user-select:none; touch-action:pan-y; }
+.vw-frame.zoomed { touch-action:none; cursor:grab; }
+.vw-frame.panning { cursor:grabbing; }
+.vw-stage { position:absolute; inset:0; transform-origin:0 0; will-change:transform; }
+.vw-stage img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; }
+.vw-frame.crisp .vw-stage img { image-rendering:pixelated; }
+.vw-status { position:absolute; left:8px; bottom:8px; padding:3px 9px; border-radius:999px; background:rgba(0,0,0,.6); color:#fff; font-size:.78rem; pointer-events:none; }
+.vw-meta { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 18px; margin:8px 2px 0; }
+.vw-meta span { color:var(--muted); }
+.vw-hint { color:var(--muted); font-size:.8rem; margin:6px 0 0; }
+"""
+
+VIEWER_JS = """
+document.querySelectorAll("section.viewer").forEach(function (box) {
+  var data = JSON.parse(box.querySelector("script.vw-data").textContent);
+  var selR = box.querySelector(".vw-region"), selP = box.querySelector(".vw-product");
+  var frame = box.querySelector(".vw-frame"), stage = frame.querySelector(".vw-stage"), img = frame.querySelector("img");
+  var status = frame.querySelector(".vw-status"), range = box.querySelector(".vw-range"), play = box.querySelector(".vw-play");
+  var pos = box.querySelector(".vw-pos"), zl = box.querySelector(".vw-zl"), strong = box.querySelector(".vw-sgt"), utc = box.querySelector(".vw-utc");
+  var links = box.querySelectorAll("a.vw-link");
+  var Z_MAX = 8, CRISP_AT = 4, z = 1, tx = 0, ty = 0, idx = 0, tok = 0, timer = null, started = false, reg = null, prod = null;
+  var keep = [];   // recently used Image objects (decoded pictures stay ready): the 24 newest
+  function remember(im) { keep.push(im); if (keep.length > 24) keep.shift(); }
+  function load(url) {
+    return new Promise(function (ok, bad) { var im = new Image(); im.onload = function () { remember(im); ok(url); }; im.onerror = bad; im.src = url; });
+  }
+  data.regions.forEach(function (r, i) { var o = document.createElement("option"); o.value = i; o.textContent = r.title; selR.appendChild(o); });
+  function full(i) { return prod.prefix + prod.scans[i].name + ".png"; }
+  function prev(i) { return prod.prefix + "previews/" + prod.scans[i].name + ".jpg"; }
+  function applyView() {
+    var w = frame.clientWidth, h = frame.clientHeight;
+    z = Math.max(1, Math.min(Z_MAX, z));
+    tx = Math.min(0, Math.max(w - w * z, tx)); ty = Math.min(0, Math.max(h - h * z, ty));
+    stage.style.transform = "translate(" + tx + "px," + ty + "px) scale(" + z + ")";
+    frame.classList.toggle("zoomed", z > 1); frame.classList.toggle("crisp", z >= CRISP_AT);
+    zl.textContent = (Math.round(z * 10) / 10) + "\\u00d7";
+  }
+  function zoomAt(nz, px, py) { nz = Math.max(1, Math.min(Z_MAX, nz)); tx = px - (px - tx) * nz / z; ty = py - (py - ty) * nz / z; z = nz; applyView(); }
+  function setRegion(i) {
+    reg = data.regions[i];
+    frame.style.aspectRatio = reg.w + " / " + reg.h;
+    frame.style.maxWidth = "min(100%, calc(88vh * " + reg.w + " / " + reg.h + "))";
+    var keepId = prod ? prod.id : null;
+    selP.innerHTML = "";
+    reg.products.forEach(function (p, k) { var o = document.createElement("option"); o.value = k; o.textContent = p.title; selP.appendChild(o); });
+    var k = 0; reg.products.forEach(function (p, j) { if (p.id === keepId) k = j; });
+    selP.value = k; z = 1; tx = ty = 0; applyView(); setProduct(k, true);
+  }
+  function setProduct(k, newest) {
+    var old = prod && prod.scans[idx] ? prod.scans[idx].name : null;
+    prod = reg.products[k]; var n = prod.scans.length, j = n - 1;
+    if (!newest && old) { j = 0; prod.scans.forEach(function (s, m) { if (s.name <= old) j = m; }); }   // keep the same time
+    range.max = n - 1; range.disabled = n < 2;
+    show(j, false);
+  }
+  function label(i) {
+    var s = prod.scans[i];
+    strong.textContent = s.sgt; utc.textContent = s.utc; pos.textContent = (i + 1) + " / " + prod.scans.length;
+    range.value = i; range.setAttribute("aria-valuetext", s.sgt);
+    links.forEach(function (a) { a.href = full(i); });
+    img.alt = "Himawari-9 " + prod.title + ", " + s.utc;
+  }
+  var settle = null;
+  function show(i, quick) {
+    idx = Math.max(0, Math.min(prod.scans.length - 1, i)); label(idx);
+    if (!started) return;
+    var my = ++tok, f = full(idx), p = prev(idx), done = false;
+    function put(url, what) { if (my !== tok) return; img.src = url; status.textContent = what; status.style.display = what ? "" : "none"; }
+    clearTimeout(settle);
+    load(p).then(function () { if (!done) put(p, quick || timer ? "" : "loading full size\u2026"); }, function () {});
+    if (timer) return;                                   // playing: previews only
+    function fetchFull() {
+      if (my !== tok) return;
+      load(f).then(function () {
+        done = true; put(f, "");
+        if (my === tok) [idx + 1, idx - 1, idx + 2].forEach(function (k) { if (k >= 0 && k < prod.scans.length) load(full(k)).catch(function () {}); });
+      }, function () { if (!done) put(p, "full size unavailable"); });
+    }
+    if (quick) settle = setTimeout(fetchFull, 450); else fetchFull();   // while scrubbing, wait until the slider rests
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; play.textContent = "\\u25b6 Play"; show(idx, false); } }
+  function start() {
+    play.textContent = "\\u275a\\u275a Pause";
+    if (idx >= prod.scans.length - 1) show(0, true);
+    var k = 0; (function warm() { if (k >= prod.scans.length || !timer) return; var im = new Image(); im.onload = im.onerror = warm; im.src = prev(k++); })();
+    timer = setInterval(function () { show(idx + 1 >= prod.scans.length ? 0 : idx + 1, true); }, 400);
+  }
+  // zoom and pan
+  function local(e) { var r = frame.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  var ptrs = {}, mode = null, pan0 = null, pinch0 = null;
+  function nPtrs() { return Object.keys(ptrs).length; }
+  function startPan(e) { var l = local(e); pan0 = { x: l[0], y: l[1], tx: tx, ty: ty }; mode = "pan"; frame.classList.add("panning"); }
+  frame.addEventListener("pointerdown", function (e) {
+    if (e.button > 0) return;
+    ptrs[e.pointerId] = e; try { frame.setPointerCapture(e.pointerId); } catch (x) {}
+    if (nPtrs() === 2) {
+      var k = Object.keys(ptrs), a = ptrs[k[0]], b = ptrs[k[1]], r = frame.getBoundingClientRect();
+      pinch0 = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1, z: z, mx: (a.clientX + b.clientX) / 2 - r.left, my: (a.clientY + b.clientY) / 2 - r.top, tx: tx, ty: ty };
+      mode = "pinch"; frame.classList.remove("panning"); return;
+    }
+    if (z > 1) { startPan(e); e.preventDefault(); }
+  });
+  frame.addEventListener("pointermove", function (e) {
+    if (!ptrs[e.pointerId]) return; ptrs[e.pointerId] = e;
+    if (mode === "pan" && pan0) { var m = local(e); tx = pan0.tx + (m[0] - pan0.x); ty = pan0.ty + (m[1] - pan0.y); applyView(); }
+    else if (mode === "pinch" && pinch0) {
+      var k = Object.keys(ptrs), a = ptrs[k[0]], b = ptrs[k[1]], r = frame.getBoundingClientRect();
+      var d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1, nz = Math.max(1, Math.min(Z_MAX, pinch0.z * d / pinch0.d));
+      tx = pinch0.mx - (pinch0.mx - pinch0.tx) * nz / pinch0.z; ty = pinch0.my - (pinch0.my - pinch0.ty) * nz / pinch0.z; z = nz;
+      tx += (a.clientX + b.clientX) / 2 - r.left - pinch0.mx; ty += (a.clientY + b.clientY) / 2 - r.top - pinch0.my; applyView();
+    }
+  });
+  function release(e) {
+    delete ptrs[e.pointerId]; frame.classList.remove("panning");
+    if (nPtrs() === 1 && z > 1) { var k = Object.keys(ptrs); startPan(ptrs[k[0]]); } else { mode = null; pan0 = null; pinch0 = null; }
+  }
+  frame.addEventListener("pointerup", release); frame.addEventListener("pointercancel", release);
+  frame.addEventListener("dblclick", function (e) { var l = local(e); if (z >= Z_MAX) { z = 1; tx = ty = 0; applyView(); } else zoomAt(z * 2, l[0], l[1]); });
+  frame.addEventListener("wheel", function (e) {   // Ctrl/Cmd + wheel, or a trackpad pinch (which sends Ctrl + wheel)
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault(); var l = local(e); zoomAt(z * Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0025)), l[0], l[1]);
+  }, { passive: false });
+  box.querySelectorAll(".vw-zoom").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var a = btn.dataset.z, w = frame.clientWidth, h = frame.clientHeight;
+      if (a === "reset") { z = 1; tx = ty = 0; applyView(); } else zoomAt(a === "in" ? z * 1.5 : z / 1.5, w / 2, h / 2);
+    });
+  });
+  selR.addEventListener("change", function () { stop(); setRegion(+selR.value); });
+  selP.addEventListener("change", function () { stop(); setProduct(+selP.value, false); });
+  range.addEventListener("input", function () { stop(); show(+range.value, true); });
+  box.querySelector(".vw-prev").addEventListener("click", function () { stop(); show(idx - 1, true); });
+  box.querySelector(".vw-next").addEventListener("click", function () { stop(); show(idx + 1, true); });
+  play.addEventListener("click", function () { if (timer) stop(); else start(); });
+  window.addEventListener("resize", applyView);
+  setRegion(0);
+  function begin() { if (!started) { started = true; show(idx, false); } }
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(function (es, ob) { if (es.some(function (e) { return e.isIntersecting; })) { begin(); ob.disconnect(); } }).observe(frame);
+  } else { begin(); }
+});
+"""
+
 PAGE = """<!doctype html>
 <html lang="en">
 <head>
@@ -374,7 +479,7 @@ p.note {{ margin:4px 0 0; color:var(--muted); font-size:.85rem; }}
 section.region + section.region {{ margin-top:40px; border-top:1px solid var(--line); padding-top:8px; }}
 .grid small {{ display:block; padding:6px 8px; color:var(--muted); font-size:.78rem; line-height:1.3; }}
 {compare_css}
-{timeline_css}
+{viewer_css}
 footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 </style>
 </head>
@@ -393,7 +498,7 @@ footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 </main>
 <script>
 {compare_js}
-{timeline_js}
+{viewer_js}
 (function () {{
   var regions = document.querySelectorAll("section.region");
   if (regions.length < 2) return;
@@ -443,19 +548,6 @@ def section_html(sec: dict, folder: Path, names: list[str], rel: str, sec_id: st
                f'&minus;20&nbsp;&deg;C is grey</p><div class="bar" style="background:{ir_scale.css_gradient()}"></div>'
                f'<div class="ticks">{ticks}</div></div>')
 
-    asc = sorted(names)  # the slider runs oldest -> newest
-    tl_data = json.dumps(dict(prefix=prefix, title=sec["title"], scans=[
-        dict(name=n[:-4], utc=fmt(scan_time(n))[0], sgt=fmt(scan_time(n))[1]) for n in asc])).replace("</", "<\\/")
-    timeline = ""
-    if len(names) > 1:
-        timeline = f"""  <div class="tl">
-    <button type="button" class="tl-prev" aria-label="Previous scan">&#9664;</button>
-    <button type="button" class="tl-play" aria-label="Play or pause the time series">&#9654; Play</button>
-    <button type="button" class="tl-next" aria-label="Next scan">&#9654;</button>
-    <input type="range" class="tl-range" min="0" max="{len(names) - 1}" value="{len(names) - 1}" step="1" aria-label="Scan time">
-    <span class="tl-pos"></span>
-  </div>
-  <script type="application/json" class="tl-data">{tl_data}</script>"""
     cards = []
     for n in names:
         u, s = fmt(scan_time(n))
@@ -470,12 +562,11 @@ def section_html(sec: dict, folder: Path, names: list[str], rel: str, sec_id: st
     return f"""<section class="product" id="{sec_id}">
 <h2>{sec['title']}</h2>
 <p class="blurb">{sec['blurb']}</p>
-<div class="hero"{' data-tl' if len(names) > 1 else ''}>
-  <a href="{latest}" class="tl-link"><img class="tl-img" src="{latest}" alt="Himawari-9 {sec['title']}, {utc}" width="{width}" height="{height}"></a>
-{timeline}
+<div class="hero">
+  <a href="{latest}"><img src="{latest}" alt="Himawari-9 {sec['title']}, {utc}" width="{width}" height="{height}"></a>
   <div class="meta">
-    <div><strong class="tl-sgt">{sgt}</strong><br><span class="tl-utc">{utc}</span></div>
-    <div><a href="{latest}" class="tl-link" download>Download PNG</a> &middot; <a href="{latest}" class="tl-link">Open full size</a></div>
+    <div><strong>{sgt}</strong><br><span>{utc}</span></div>
+    <div><a href="{latest}" download>Download PNG</a> &middot; <a href="{latest}">Open full size</a></div>
   </div>
 </div>
 {key}{note}
@@ -522,8 +613,43 @@ def compare_html(reg: dict, entries: list, sec_id: str) -> str:
 </section>"""
 
 
+def viewer_html(vregions: list) -> str:
+    """The high-resolution time viewer tab: pick region and product, scrub or play through the scans, zoom and pan."""
+    payload = json.dumps(dict(regions=vregions)).replace("</", "<\\/")
+    return f"""<section class="region viewer" data-region="viewer" id="viewer">
+<h2>Time viewer</h2>
+<p class="blurb">Step or play through the kept scans (last 2 days) at high resolution, then zoom and pan. Choose the region and product; the same time is kept when you change product.</p>
+<div class="vw-controls">
+  <label>Region<select class="vw-region"></select></label>
+  <label>Product<select class="vw-product"></select></label>
+</div>
+<div class="vw-row">
+  <button type="button" class="vw-prev" aria-label="Previous scan">&#9664;</button>
+  <button type="button" class="vw-play" aria-label="Play or pause">&#9654; Play</button>
+  <button type="button" class="vw-next" aria-label="Next scan">&#9654;</button>
+  <input type="range" class="vw-range" min="0" max="0" value="0" step="1" aria-label="Scan time">
+  <span class="vw-pos"></span>
+  <span class="vw-sep"></span>
+  <button type="button" class="vw-zoom" data-z="out" aria-label="Zoom out">&minus;</button>
+  <span class="vw-zl" aria-live="polite">1&times;</span>
+  <button type="button" class="vw-zoom" data-z="in" aria-label="Zoom in">+</button>
+  <button type="button" class="vw-zoom" data-z="reset">Reset</button>
+</div>
+<div class="vw-frame" style="aspect-ratio:25/14;">
+  <div class="vw-stage"><img alt="" decoding="async"></div>
+  <span class="vw-status" style="display:none"></span>
+</div>
+<div class="vw-meta">
+  <div><strong class="vw-sgt"></strong><br><span class="vw-utc"></span></div>
+  <div><a class="vw-link" href="#" download>Download PNG</a> &middot; <a class="vw-link" href="#">Open full size</a></div>
+</div>
+<p class="vw-hint">Zoom with the + / &minus; buttons, Ctrl (or &#8984;) + scroll, a trackpad or two-finger pinch, or double-click; drag the picture to pan when zoomed. Past 4&times; the real satellite pixels are shown. While you scrub or play, mid-size previews are shown and the full-size image follows when you stop.</p>
+<script type="application/json" class="vw-data">{payload}</script>
+</section>"""
+
+
 def build(root: Path) -> None:
-    regions, summary = [], []
+    regions, summary, vregions = [], [], []
     for reg in REGION_TABS:
         sections, parts, compare_entries = [], [], []
         for sec in SECTIONS:
@@ -543,6 +669,12 @@ def build(root: Path) -> None:
             sec_id = sec["key"] if not reg["dir"] else f"{reg['key']}-{sec['key']}"
             parts.append(section_html(sec, folder, names, rel, sec_id))
             summary.append(f"{reg['key']} {sec['title']}: {len(names)} scans (newest {names[0][:-4]})")
+        if compare_entries:
+            vregions.append(dict(key=reg["key"], title=html.unescape(reg["title"]), w=compare_entries[0][4][0],
+                                 h=compare_entries[0][4][1], products=[
+                dict(id=sec["key"], title=sec["title"], prefix=f"{rel}/" if rel else "", scans=[
+                    dict(name=n[:-4], utc=fmt(scan_time(n))[0], sgt=fmt(scan_time(n))[1]) for n in sorted(names)])
+                for sec, _, rel, names, _ in compare_entries]))
         if len(compare_entries) > 1:  # a slider needs two products
             cmp_id = "compare" if not reg["dir"] else f"{reg['key']}-compare"
             parts.append(compare_html(reg, [(a, b, c, d, e) for a, b, c, d, e in compare_entries], cmp_id))
@@ -559,6 +691,8 @@ def build(root: Path) -> None:
     if not regions:
         raise SystemExit(f"no YYYYMMDD_HHMM.png files in {root}")
 
+    if any(len(p["scans"]) > 1 for r in vregions for p in r["products"]):
+        regions.append((dict(key="viewer", title="Time viewer"), viewer_html(vregions)))
     tabs = ""
     if len(regions) > 1:
         tabs = ('<div class="tabs" role="tablist">' + "".join(
@@ -566,7 +700,7 @@ def build(root: Path) -> None:
             for r, _ in regions) + "</div>")
     (root / "index.html").write_text(
         PAGE.format(tabs=tabs, body="\n".join(html_ for _, html_ in regions),
-                    compare_css=COMPARE_CSS, compare_js=COMPARE_JS, timeline_css=TIMELINE_CSS, timeline_js=TIMELINE_JS,
+                    compare_css=COMPARE_CSS, compare_js=COMPARE_JS, viewer_css=VIEWER_CSS, viewer_js=VIEWER_JS,
                     built=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"))
     )
     (root / ".nojekyll").write_text("")  # serve files as-is, skip Jekyll

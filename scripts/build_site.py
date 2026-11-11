@@ -282,7 +282,13 @@ section.viewer h2 { margin-bottom:4px; }
 .vw-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:0 0 10px; }
 .vw-row button { font:inherit; min-width:38px; height:34px; padding:0 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); cursor:pointer; }
 .vw-row button:hover, .vw-row button:focus-visible { border-color:var(--accent); }
-.vw-row input[type=range] { flex:1 1 260px; min-width:140px; height:28px; accent-color:var(--accent); cursor:pointer; }
+.vw-row input[type=range] { width:100%; height:28px; margin:0; display:block; accent-color:var(--accent); cursor:pointer; }
+.vw-track { position:relative; flex:1 1 260px; min-width:140px; height:44px; }
+.vw-shade { position:absolute; left:0; width:0; top:28px; height:5px; border-radius:3px; background:var(--accent); opacity:.55; pointer-events:none; }
+.vw-mk { position:absolute; top:30px; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:10px solid; margin-left:-6px; pointer-events:none; display:none; }
+.vw-mk.s { color:#1a9a4a; } .vw-mk.e { color:#d33a3a; }
+.vw-mk::after { content:attr(data-t); position:absolute; top:11px; left:-8px; width:22px; text-align:center; font:600 .65rem/1 system-ui,sans-serif; color:var(--muted); }
+.vw-loop { color:var(--muted); font-size:.85rem; }
 .vw-row .vw-pos { color:var(--muted); font-size:.8rem; min-width:7ch; text-align:right; }
 .vw-row .vw-zl { min-width:3ch; text-align:center; font-size:.9rem; color:var(--muted); }
 .vw-row .vw-sep { width:1px; height:24px; background:var(--line); margin:0 4px; }
@@ -306,6 +312,8 @@ document.querySelectorAll("section.viewer").forEach(function (box) {
   var status = frame.querySelector(".vw-status"), range = box.querySelector(".vw-range"), play = box.querySelector(".vw-play");
   var pos = box.querySelector(".vw-pos"), zl = box.querySelector(".vw-zl"), strong = box.querySelector(".vw-sgt"), utc = box.querySelector(".vw-utc");
   var links = box.querySelectorAll("a.vw-link");
+  var shade = box.querySelector(".vw-shade"), mkS = box.querySelector(".vw-mk.s"), mkE = box.querySelector(".vw-mk.e"), loopTxt = box.querySelector(".vw-loop");
+  var sName = null, eName = null;   // anchors, kept as scan names so they carry over when the product changes
   var Z_MAX = 8, CRISP_AT = 4, z = 1, tx = 0, ty = 0, idx = 0, tok = 0, timer = null, started = false, reg = null, prod = null;
   var keep = [];   // recently used Image objects (decoded pictures stay ready): the 24 newest
   function remember(im) { keep.push(im); if (keep.length > 24) keep.shift(); }
@@ -339,7 +347,21 @@ document.querySelectorAll("section.viewer").forEach(function (box) {
     prod = reg.products[k]; var n = prod.scans.length, j = n - 1;
     if (!newest && old) { j = 0; prod.scans.forEach(function (s, m) { if (s.name <= old) j = m; }); }   // keep the same time
     range.max = n - 1; range.disabled = n < 2;
-    show(j, false);
+    drawAnchors(); show(j, false);
+  }
+  function windowIdx() {   // [first, last] scan index of the loop
+    var n = prod.scans.length, lo = 0, hi = n - 1, k;
+    if (sName) { for (k = 0; k < n; k++) if (prod.scans[k].name >= sName) { lo = k; break; } }
+    if (eName) { for (k = n - 1; k >= 0; k--) if (prod.scans[k].name <= eName) { hi = k; break; } }
+    return lo > hi ? [0, n - 1] : [lo, hi];
+  }
+  function at(frac) { return "calc(8px + (100% - 16px) * " + frac + ")"; }   // where the slider thumb sits (about 16 px wide)
+  function drawAnchors() {
+    var n = prod.scans.length, w = windowIdx(), has = (sName || eName) && n > 1, d = Math.max(1, n - 1);
+    mkS.style.display = sName && n > 1 ? "block" : "none"; mkE.style.display = eName && n > 1 ? "block" : "none";
+    mkS.style.left = at(w[0] / d); mkE.style.left = at(w[1] / d);
+    shade.style.display = has ? "block" : "none"; shade.style.left = at(w[0] / d); shade.style.width = "calc((100% - 16px) * " + ((w[1] - w[0]) / d) + ")";
+    loopTxt.textContent = has ? "Loop: " + prod.scans[w[0]].sgt + " \\u2192 " + prod.scans[w[1]].sgt + " (" + (w[1] - w[0] + 1) + " scans)" : "Loop: all scans";
   }
   function label(i) {
     var s = prod.scans[i];
@@ -368,10 +390,11 @@ document.querySelectorAll("section.viewer").forEach(function (box) {
   }
   function stop() { if (timer) { clearInterval(timer); timer = null; play.textContent = "\\u25b6 Play"; show(idx, false); } }
   function start() {
+    var w = windowIdx();
     play.textContent = "\\u275a\\u275a Pause";
-    if (idx >= prod.scans.length - 1) show(0, true);
-    var k = 0; (function warm() { if (k >= prod.scans.length || !timer) return; var im = new Image(); im.onload = im.onerror = warm; im.src = prev(k++); })();
-    timer = setInterval(function () { show(idx + 1 >= prod.scans.length ? 0 : idx + 1, true); }, 400);
+    if (idx < w[0] || idx >= w[1]) show(w[0], true);
+    var k = w[0]; (function warm() { if (k > w[1] || !timer) return; var im = new Image(); im.onload = im.onerror = warm; im.src = prev(k++); })();
+    timer = setInterval(function () { var u = windowIdx(); show(idx + 1 > u[1] || idx < u[0] ? u[0] : idx + 1, true); }, 400);
   }
   // zoom and pan
   function local(e) { var r = frame.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
@@ -414,6 +437,9 @@ document.querySelectorAll("section.viewer").forEach(function (box) {
       if (a === "reset") { z = 1; tx = ty = 0; applyView(); } else zoomAt(a === "in" ? z * 1.5 : z / 1.5, w / 2, h / 2);
     });
   });
+  box.querySelector(".vw-set-s").addEventListener("click", function () { sName = prod.scans[idx].name; if (eName && eName < sName) eName = null; drawAnchors(); });
+  box.querySelector(".vw-set-e").addEventListener("click", function () { eName = prod.scans[idx].name; if (sName && sName > eName) sName = null; drawAnchors(); });
+  box.querySelector(".vw-clear").addEventListener("click", function () { sName = eName = null; drawAnchors(); });
   selR.addEventListener("change", function () { stop(); setRegion(+selR.value); });
   selP.addEventListener("change", function () { stop(); setProduct(+selP.value, false); });
   range.addEventListener("input", function () { stop(); show(+range.value, true); });
@@ -618,7 +644,7 @@ def viewer_html(vregions: list) -> str:
     payload = json.dumps(dict(regions=vregions)).replace("</", "<\\/")
     return f"""<section class="region viewer" data-region="viewer" id="viewer">
 <h2>Time viewer</h2>
-<p class="blurb">Step or play through the kept scans (last 2 days) at high resolution, then zoom and pan. Choose the region and product; the same time is kept when you change product.</p>
+<p class="blurb">Step or play through the kept scans (last 2 days) at high resolution, then zoom and pan. Choose the region and product; the same time is kept when you change product. Set a start and an end anchor on the slider to loop just that stretch.</p>
 <div class="vw-controls">
   <label>Region<select class="vw-region"></select></label>
   <label>Product<select class="vw-product"></select></label>
@@ -627,13 +653,22 @@ def viewer_html(vregions: list) -> str:
   <button type="button" class="vw-prev" aria-label="Previous scan">&#9664;</button>
   <button type="button" class="vw-play" aria-label="Play or pause">&#9654; Play</button>
   <button type="button" class="vw-next" aria-label="Next scan">&#9654;</button>
-  <input type="range" class="vw-range" min="0" max="0" value="0" step="1" aria-label="Scan time">
+  <div class="vw-track">
+    <input type="range" class="vw-range" min="0" max="0" value="0" step="1" aria-label="Scan time">
+    <span class="vw-shade"></span><span class="vw-mk s" data-t="start" title="Start anchor"></span><span class="vw-mk e" data-t="end" title="End anchor"></span>
+  </div>
   <span class="vw-pos"></span>
   <span class="vw-sep"></span>
   <button type="button" class="vw-zoom" data-z="out" aria-label="Zoom out">&minus;</button>
   <span class="vw-zl" aria-live="polite">1&times;</span>
   <button type="button" class="vw-zoom" data-z="in" aria-label="Zoom in">+</button>
   <button type="button" class="vw-zoom" data-z="reset">Reset</button>
+</div>
+<div class="vw-row">
+  <button type="button" class="vw-set-s" title="Make the scan on screen the start of the loop">&#9667;| Set start</button>
+  <button type="button" class="vw-set-e" title="Make the scan on screen the end of the loop">Set end |&#9657;</button>
+  <button type="button" class="vw-clear">Clear</button>
+  <span class="vw-loop" aria-live="polite"></span>
 </div>
 <div class="vw-frame" style="aspect-ratio:25/14;">
   <div class="vw-stage"><img alt="" decoding="async"></div>

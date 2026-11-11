@@ -72,7 +72,9 @@ trackpad or two-finger pinch, or double-click; drag the picture to pan when zoom
 scrolls); past 4× the real satellite pixels are drawn as sharp squares. While you scrub or play it shows mid-size JPEG previews
 (`previews/` next to each folder's PNGs, 1500 px, about 0.2-0.5 MB each, built by `build_site.py` like the thumbnails and removed with their
 PNG); about half a second after you stop it loads the full-size PNG (5-7 MB) for the scan on screen and fetches its two neighbours in
-advance, so stepping at full size takes a second or two on a slow connection. Zoom and pan stay when you change scan or product. Download PNG
+advance, so stepping at full size takes a second or two on a slow connection. **Start and end anchors:** move to a scan and press *Set start*, move to another and press *Set end*; green and red markers and a shaded bar show the stretch on the
+slider, and **Play** loops only between them (the slider and ◀ ▶ still reach every scan). *Clear* removes both. The anchors are kept as times, so they carry over
+when you change product (to the nearest scans inside the same stretch); setting an end before the start drops the start. Zoom and pan stay when you change scan or product. Download PNG
 always points at the scan on screen. The viewer loads nothing until its tab is opened. The product sections no longer have their own
 sliders: they show the latest image plus thumbnails, as before.
 

@@ -64,6 +64,14 @@ Day Fire. To serve it, enable Pages once:
 The site is then at `https://<owner>.github.io/satellite/` and updates after every run (allow a minute or two for Pages
 to redeploy). Note that Pages sites are public, and on a private repository Pages needs a paid GitHub plan.
 
+**Time slider.** Every product section on every region tab has a slider under its main image that runs through the kept scans
+(last 2 days, oldest to newest; the position is by scan, not evenly spaced in time, and the label shows the exact SGT / UTC time).
+Drag it, use the ◀ ▶ buttons or the arrow keys, or press **Play** to loop through the scans. While scrubbing or playing it shows
+mid-size JPEG previews (`previews/` next to each folder's PNGs, 1500 px, about 0.2-0.5 MB each, made by `build_site.py` like the
+thumbnails and removed with their PNG); half a second after you stop it swaps in the full-size PNG, and Download / Open full size
+always point at the scan on screen. Each product has its own scan list (IR Enhanced also has the night scans). The first run after
+this feature appeared builds a preview for every kept image, which takes a few extra minutes once.
+
 **Compare slider.** Each region tab ends with a *Compare* section: a before/after slider for two products of the same
 scan. Choose the left and right product (True Color, IR Enhanced, Day Fire; it starts as True Color vs IR Enhanced) and a scan
 time from the dropdowns; the time list holds the scans that exist for both products (kept images, last 2 days; at night only

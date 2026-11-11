@@ -27,6 +27,7 @@ import ir_scale  # noqa: E402
 NAME_RE = re.compile(r"^(\d{8})_(\d{4})\.png$")
 SGT = dt.timezone(dt.timedelta(hours=8))
 THUMB_WIDTH = 480
+PREVIEW_MAX = (1500, 1900)  # JPEG previews for the time slider: sharp enough to scrub and play, ~0.3-0.5 MB each
 
 # NOAA/CIRA VIIRS Day Fire RGB Quick Guide, "RGB Interpretation" table.
 DAY_FIRE_KEY = (
@@ -113,6 +114,74 @@ def make_thumbs(folder: Path, names: list[str]) -> None:
             im.thumbnail((THUMB_WIDTH, THUMB_WIDTH * im.height // im.width))
             im.save(dest, quality=82, optimize=True)
 
+
+def make_previews(folder: Path, names: list[str]) -> None:
+    """Mid-size JPEGs (previews/<scan>.jpg) that the time slider shows while scrubbing or playing."""
+    previews = folder / "previews"
+    previews.mkdir(exist_ok=True)
+    wanted = {n[:-4] + ".jpg" for n in names}
+    for old in previews.glob("*.jpg"):
+        if old.name not in wanted:
+            old.unlink()
+    for n in names:
+        dest = previews / (n[:-4] + ".jpg")
+        if dest.exists():
+            continue
+        with Image.open(folder / n) as im:
+            im = im.convert("RGB")
+            im.thumbnail(PREVIEW_MAX)
+            im.save(dest, quality=80, optimize=True)
+
+
+TIMELINE_CSS = """
+.tl { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; padding:10px 14px 12px; border-top:1px solid var(--line); }
+.tl button { font:inherit; min-width:38px; height:34px; padding:0 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); cursor:pointer; }
+.tl button:hover, .tl button:focus-visible { border-color:var(--accent); }
+.tl input[type=range] { flex:1 1 240px; min-width:140px; height:28px; accent-color:var(--accent); cursor:pointer; }
+.tl .tl-pos { color:var(--muted); font-size:.8rem; min-width:7ch; text-align:right; }
+.hero img.tl-img { transition:none; }
+"""
+
+TIMELINE_JS = """
+document.querySelectorAll(".hero[data-tl]").forEach(function (hero) {
+  var data = JSON.parse(hero.querySelector("script.tl-data").textContent), scans = data.scans, n = scans.length;
+  var img = hero.querySelector("img.tl-img"), range = hero.querySelector(".tl-range"), play = hero.querySelector(".tl-play");
+  var strong = hero.querySelector(".tl-sgt"), span = hero.querySelector(".tl-utc"), pos = hero.querySelector(".tl-pos");
+  var links = hero.querySelectorAll("a.tl-link"), idx = n - 1, timer = null, settle = null, preloaded = false;
+  function full(i) { return data.prefix + scans[i].name + ".png"; }
+  function prev(i) { return data.prefix + "previews/" + scans[i].name + ".jpg"; }
+  function label(i) {
+    strong.textContent = scans[i].sgt; span.textContent = scans[i].utc; pos.textContent = (i + 1) + " / " + n;
+    range.value = i; range.setAttribute("aria-valuetext", scans[i].sgt);
+    links.forEach(function (a) { a.href = full(i); });
+    img.alt = "Himawari-9 " + data.title + ", " + scans[i].utc;
+  }
+  function loadFull(i) {   // swap in the full-size PNG once the slider has rested
+    var im = new Image(); im.onload = function () { if (idx === i && !timer) img.src = full(i); }; im.src = full(i);
+  }
+  function show(i, quick) {
+    idx = Math.max(0, Math.min(n - 1, i)); label(idx);
+    img.src = quick ? prev(idx) : full(idx);
+    clearTimeout(settle);
+    if (quick) { new Image().src = prev(Math.min(n - 1, idx + 1)); new Image().src = prev(Math.max(0, idx - 1)); settle = setTimeout(function () { loadFull(idx); }, 500); }
+  }
+  function preloadAll() {
+    if (preloaded) return; preloaded = true; var k = 0;
+    (function next() { if (k >= n) return; var im = new Image(); im.onload = im.onerror = next; im.src = prev(k++); })();
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; play.textContent = "\u25b6 Play"; loadFull(idx); } }
+  function start() {
+    preloadAll(); play.textContent = "\u275a\u275a Pause";
+    if (idx >= n - 1) show(0, true);
+    timer = setInterval(function () { show(idx + 1 >= n ? 0 : idx + 1, true); }, 400);
+  }
+  range.addEventListener("input", function () { stop(); preloaded || preloadAll(); show(+range.value, true); });
+  hero.querySelector(".tl-prev").addEventListener("click", function () { stop(); show(idx - 1, true); });
+  hero.querySelector(".tl-next").addEventListener("click", function () { stop(); show(idx + 1, true); });
+  play.addEventListener("click", function () { if (timer) stop(); else start(); });
+  label(idx);
+});
+"""
 
 COMPARE_CSS = """
 section.compare { margin-top:32px; scroll-margin-top:12px; }
@@ -305,6 +374,7 @@ p.note {{ margin:4px 0 0; color:var(--muted); font-size:.85rem; }}
 section.region + section.region {{ margin-top:40px; border-top:1px solid var(--line); padding-top:8px; }}
 .grid small {{ display:block; padding:6px 8px; color:var(--muted); font-size:.78rem; line-height:1.3; }}
 {compare_css}
+{timeline_css}
 footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 </style>
 </head>
@@ -323,6 +393,7 @@ footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 </main>
 <script>
 {compare_js}
+{timeline_js}
 (function () {{
   var regions = document.querySelectorAll("section.region");
   if (regions.length < 2) return;
@@ -372,6 +443,19 @@ def section_html(sec: dict, folder: Path, names: list[str], rel: str, sec_id: st
                f'&minus;20&nbsp;&deg;C is grey</p><div class="bar" style="background:{ir_scale.css_gradient()}"></div>'
                f'<div class="ticks">{ticks}</div></div>')
 
+    asc = sorted(names)  # the slider runs oldest -> newest
+    tl_data = json.dumps(dict(prefix=prefix, title=sec["title"], scans=[
+        dict(name=n[:-4], utc=fmt(scan_time(n))[0], sgt=fmt(scan_time(n))[1]) for n in asc])).replace("</", "<\\/")
+    timeline = ""
+    if len(names) > 1:
+        timeline = f"""  <div class="tl">
+    <button type="button" class="tl-prev" aria-label="Previous scan">&#9664;</button>
+    <button type="button" class="tl-play" aria-label="Play or pause the time series">&#9654; Play</button>
+    <button type="button" class="tl-next" aria-label="Next scan">&#9654;</button>
+    <input type="range" class="tl-range" min="0" max="{len(names) - 1}" value="{len(names) - 1}" step="1" aria-label="Scan time">
+    <span class="tl-pos"></span>
+  </div>
+  <script type="application/json" class="tl-data">{tl_data}</script>"""
     cards = []
     for n in names:
         u, s = fmt(scan_time(n))
@@ -386,11 +470,12 @@ def section_html(sec: dict, folder: Path, names: list[str], rel: str, sec_id: st
     return f"""<section class="product" id="{sec_id}">
 <h2>{sec['title']}</h2>
 <p class="blurb">{sec['blurb']}</p>
-<div class="hero">
-  <a href="{latest}"><img src="{latest}" alt="Himawari-9 {sec['title']}, {utc}" width="{width}" height="{height}"></a>
+<div class="hero"{' data-tl' if len(names) > 1 else ''}>
+  <a href="{latest}" class="tl-link"><img class="tl-img" src="{latest}" alt="Himawari-9 {sec['title']}, {utc}" width="{width}" height="{height}"></a>
+{timeline}
   <div class="meta">
-    <div><strong>{sgt}</strong><br><span>{utc}</span></div>
-    <div><a href="{latest}" download>Download PNG</a> &middot; <a href="{latest}">Open full size</a></div>
+    <div><strong class="tl-sgt">{sgt}</strong><br><span class="tl-utc">{utc}</span></div>
+    <div><a href="{latest}" class="tl-link" download>Download PNG</a> &middot; <a href="{latest}" class="tl-link">Open full size</a></div>
   </div>
 </div>
 {key}{note}
@@ -449,6 +534,7 @@ def build(root: Path) -> None:
             if not names:
                 continue
             make_thumbs(folder, names)
+            make_previews(folder, names)
             with Image.open(folder / names[0]) as im:
                 size = im.size
             sections.append((sec, names))
@@ -480,7 +566,7 @@ def build(root: Path) -> None:
             for r, _ in regions) + "</div>")
     (root / "index.html").write_text(
         PAGE.format(tabs=tabs, body="\n".join(html_ for _, html_ in regions),
-                    compare_css=COMPARE_CSS, compare_js=COMPARE_JS,
+                    compare_css=COMPARE_CSS, compare_js=COMPARE_JS, timeline_css=TIMELINE_CSS, timeline_js=TIMELINE_JS,
                     built=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M"))
     )
     (root / ".nojekyll").write_text("")  # serve files as-is, skip Jekyll

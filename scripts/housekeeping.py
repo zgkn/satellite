@@ -35,7 +35,7 @@ def scan_time(name: str) -> dt.datetime | None:
 
 def folders(root: Path):
     yield root
-    for sub in sorted(p for p in root.iterdir() if p.is_dir() and p.name != "thumbs" and not p.name.startswith(".")):
+    for sub in sorted(p for p in root.iterdir() if p.is_dir() and p.name not in ("thumbs", "previews") and not p.name.startswith(".")):
         yield from folders(sub)
 
 

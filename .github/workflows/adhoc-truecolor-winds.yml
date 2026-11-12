@@ -22,7 +22,7 @@ on:
         default: "0"
         type: string
       hotspots_csv:
-        description: "Optional CSV of hotspots (lat, lon, frp_mw) to draw in red; empty = none"
+        description: "Optional CSV of hotspots (lat, lon, frp_mw) to draw in red; none = no hotspots"
         required: false
         default: "data/hotspots_highconf_20261014.csv"
         type: string
@@ -93,7 +93,7 @@ jobs:
           if [ -n "$IN_WIND_RUN" ]; then args+=(--wind-run "$IN_WIND_RUN"); fi
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
           if [ "$IN_CAPTION" != "true" ]; then args+=(--no-caption); fi
-          if [ -n "$IN_HOTSPOTS" ]; then args+=(--hotspots "$IN_HOTSPOTS" --hotspot-label "$IN_HOTSPOT_LABEL"); fi
+          if [ -n "$IN_HOTSPOTS" ] && [ "$IN_HOTSPOTS" != "none" ]; then args+=(--hotspots "$IN_HOTSPOTS" --hotspot-label "$IN_HOTSPOT_LABEL"); fi
           python scripts/adhoc_truecolor_winds_hotspots.py "${args[@]}"
 
       - name: Upload PNG artifact

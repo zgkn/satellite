@@ -52,6 +52,15 @@ REGION_TABS = (
          sub="Papua: the western half of New Guinea and the Arafura Sea (132-141&deg;E, 11&deg;S-0&deg;N)"),
 )
 
+# Smoke RGB colours (ASMC-style red = visible, green = near-infrared, blue = inverted 10.4 um).
+SMOKE_KEY = (
+    ("#e6d52a", "Haze, smoke and low (warm) cloud"),
+    ("#dcd8ff", "Thick or high (cold) cloud: white / blue-white"),
+    ("#3a9a3a", "Land and vegetation"),
+    ("#1c1030", "Sea (clear)"),
+    ("#ff0000", "Fire pixel (3.9&nbsp;&micro;m, red mark)"),
+)
+
 SECTIONS = (
     dict(
         key="truecolor", title="True Color", subdir="",
@@ -87,6 +96,20 @@ SECTIONS = (
              "low-sun note on the image marks that). "
              "Himawari's 3.9&nbsp;&micro;m band has 2&nbsp;km pixels (VIIRS: 375&nbsp;m), so only larger fires show. "
              "Warm, sunlit ground and sun glint on water can also look red, and thick cloud hides fires.",
+    ),
+    dict(
+        key="smoke", title="Smoke RGB", subdir="smoke",
+        blurb="ASMC-style smoke and haze composite (R&nbsp;B03 0.64&nbsp;&micro;m, G&nbsp;B04 0.86&nbsp;&micro;m, "
+              "B&nbsp;B13 10.4&nbsp;&micro;m inverted). Telling low cloud and haze from thicker or higher cloud.",
+        key_items=SMOKE_KEY,
+        note="Land is green (strong near-infrared). Smoke, haze and low, warm cloud are yellow: they show in the visible and "
+             "near-infrared channels but not in the infrared. Thick or high cloud is cold, so it is also bright in the "
+             "infrared channel and comes out white or blue-white. The same colour assignment is not unique: warm, thick low "
+             "cloud and fog also look yellow, so use the texture (smoke is smooth and streaky, cloud is lumpy). The ranges "
+             "(red 0&ndash;45&nbsp;%, green 0&ndash;65&nbsp;%, blue 305&ndash;220&nbsp;K) were tuned here, as the guide gives "
+             "none; the 0.64/0.86&nbsp;&micro;m channels are divided by cos(sun zenith), capped at 80&deg;, like Day Fire "
+             "(an amber note marks a low sun). Red marks are fire pixels from the 3.9&nbsp;&micro;m band, as on True Color. "
+             "Daytime only.",
     ),
 )
 
@@ -463,7 +486,7 @@ PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Himawari-9 RGB</title>
-<meta name="description" content="Latest Himawari-9 True Color, IR Enhanced and Day Fire images of Sumatra, the Malay Peninsula, Singapore and Borneo.">
+<meta name="description" content="Latest Himawari-9 True Color, IR Enhanced, Day Fire and Smoke RGB images of Sumatra, the Malay Peninsula, Singapore and Borneo.">
 <style>
 :root {{ --bg:#f6f7f9; --fg:#14181f; --muted:#5b6573; --card:#fff; --line:#dfe3e8; --accent:#0b63ce; }}
 @media (prefers-color-scheme: dark) {{
@@ -514,7 +537,7 @@ footer {{ margin-top:40px; color:var(--muted); font-size:.85rem; }}
 <body>
 <main>
 <h1>Himawari-9 RGB</h1>
-<p class="sub">JMA and NOAA/CIRA RGB recipes plus a 10.4&nbsp;&micro;m infrared product &middot; True Color and Day Fire are daytime only, IR Enhanced runs day and night</p>
+<p class="sub">JMA and NOAA/CIRA RGB recipes plus a 10.4&nbsp;&micro;m infrared product &middot; True Color, Day Fire and Smoke RGB are daytime only, IR Enhanced runs day and night</p>
 {tabs}
 {body}
 <footer>

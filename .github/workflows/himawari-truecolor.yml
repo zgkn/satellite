@@ -12,7 +12,7 @@ on:
         default: ""
         type: string
       product:
-        description: "Which image(s): all, true_color, ir_enhanced (True Color + IR; day and night) or day_fire (3.9 um hotspots). At night only ir_enhanced is made"
+        description: "Which image(s): all, true_color, ir_enhanced (True Color + IR; day and night), day_fire (3.9 um hotspots) or smoke (ASMC-style smoke/haze RGB). At night only ir_enhanced is made"
         required: false
         default: all
         type: choice
@@ -21,6 +21,7 @@ on:
           - true_color
           - ir_enhanced
           - day_fire
+          - smoke
       region:
         description: "Which region: sumatra_borneo (Sumatra, Malay Peninsula, Singapore, Borneo), mekong (Mekong sub-region) or papua (132-141E, 11S-0N). Each is published to its own tab on the website"
         required: false
@@ -66,7 +67,7 @@ on:
         default: true
         type: boolean
       fire:
-        description: "True color only: mark fire pixels (hot 3.9 um signal, 325 K and 8 K above surroundings) in red. An addition, not an official fire product"
+        description: "True color and smoke RGB: mark fire pixels (hot 3.9 um signal, 325 K and 8 K above surroundings) in red. An addition, not an official fire product"
         required: false
         default: true
         type: boolean
@@ -76,7 +77,7 @@ on:
         default: true
         type: boolean
       sun_correction:
-        description: "Day fire only: divide the 0.86/0.64 um channels by cos(sun zenith) so brightness does not follow the sun"
+        description: "Day fire and smoke RGB: divide the 0.86/0.64 um channels by cos(sun zenith) so brightness does not follow the sun"
         required: false
         default: true
         type: boolean
@@ -120,7 +121,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Cache pyspectral data (Rayleigh LUTs)
-        if: ${{ inputs.rayleigh && inputs.product != 'day_fire' }}
+        if: ${{ inputs.rayleigh && inputs.product != 'day_fire' && inputs.product != 'smoke' }}
         uses: actions/cache@v4
         with:
           path: .pyspectral-data

@@ -6,17 +6,18 @@ A GitHub Actions workflow builds RGB images from Himawari-9 AHI full-disk data i
 (`s3://noaa-himawari9/AHI-L1b-FLDK/`, anonymous access, no AWS account needed). Each channel is scaled between a
 minimum and maximum (reflectance 0-100 %, or brightness temperature for the thermal band), clipped to 0-1, then
 raised to `1/gamma`. The images are built by hand with Satpy, not with its built-in composites (which add extra
-corrections). True Color and Day Fire are daytime only; IR Enhanced also runs at night.
+corrections). True Color, Day Fire and Smoke RGB are daytime only; IR Enhanced also runs at night.
 
 | Product | R | G | B | Gamma (R/G/B) | Recipe | Use |
 |---|---|---|---|---|---|---|
 | `true_color` | B03 0.64 µm | B02 0.51 µm | B01 0.47 µm | 1.7 | JMA | Natural-looking picture |
 | `ir_enhanced` | True Color + B13 10.4 µm IR overlay | | | 1.7 (True Color part) | JMA True Color + CIMSS Clean IR Window colours | Convection / cold cloud tops, day and night |
+| `smoke` | B03 0.64 µm (0-45 %) | B04 0.86 µm (0-65 %) | B13 10.4 µm, inverted (305-220 K) | 1 / 1 / 1 | ASMC-style smoke/haze composite, stretch tuned here (see Smoke RGB) | Telling haze and low cloud from thick or high cloud |
 | `day_fire` | B07 3.9 µm (27-60 °C) | B04 0.86 µm | B03 0.64 µm | 0.4 / 1 / 1 | NOAA/CIRA (VIIRS Day Fire RGB, on AHI bands; red minimum raised from 0 to 27 °C for the tropics; cold cloud shown grey) | Thermal hotspots |
 
 ### Regions
 
-The same three products are built for three regions, chosen with the `region` input (`--region` locally). Each run builds
+The same four products are built for three regions, chosen with the `region` input (`--region` locally). Each run builds
 one region; the website has a tab per region (the choice is remembered in the browser).
 
 | Region | Default box (`west,south,east,north`) | Segments | Image size | Caption box | Files on the output branch |
@@ -97,7 +98,7 @@ full-size PNGs (about 6 MB each) load only when the slider scrolls into view.
 | Input | Default | Meaning |
 |---|---|---|
 | `datetime_utc` | blank | Scan time **in UTC**, `YYYYMMDDHHMM`, minute ending in 0 (scans are every 10 min). Blank = newest complete scan from the last ~3 h. Examples: 08:00 SGT = `0000` UTC, 10:00 SGT = `0200` UTC, so `202610210200`. |
-| `product` | `all` | `true_color`, `ir_enhanced`, `day_fire` or `all`. With several, shared files (B03, B13) and the winds are fetched once. At night (sun below the horizon at the bbox centre) only `ir_enhanced` is made; the others are skipped with a notice. |
+| `product` | `all` | `true_color`, `ir_enhanced`, `day_fire`, `smoke` or `all`. With several, shared files (B03, B13) and the winds are fetched once. At night (sun below the horizon at the bbox centre) only `ir_enhanced` is made; the others are skipped with a notice. |
 | `region` | `sumatra_borneo` | `sumatra_borneo` or `mekong` (see Regions). |
 | `bbox` | blank | `west,south,east,north` in degrees. Blank = the region's box (default Sumatra-Borneo covers Sumatra, Peninsular Malaysia, Singapore and Borneo). A smaller box gives a smaller image at the same pixel size; add a finer `resolution` (e.g. `0.005`) to enlarge a fire area. B07 itself only has 2 km pixels. |
 | `gamma` | blank | True Color gamma override. Blank = 1.7, as in the JMA guide. Try `2.0` for hazy scenes. `day_fire` ignores it (its recipe has different gammas per channel). |
@@ -106,9 +107,9 @@ full-size PNGs (about 6 MB each) load only when the slider scrolls into view.
 | `winds` | **on** | Overlay thin streamlines (orange; white on IR Enhanced, where orange is lost against the red/yellow cloud colours) of ECMWF IFS 925 hPa wind (see below). If the ECMWF data cannot be fetched the run still publishes the images, without winds, and prints a warning. Locally: `--no-winds`, `--wind-level` (hPa), `--wind-spacing` (px). |
 | `coastlines` | **on** | Draw coastlines from Natural Earth 1:10m (public domain, stored in `data/ne_10m_coastline.zip`) at 1.5 px width: green on True Color, magenta on Day Fire (green would be confused with the vegetation colour). Untick for clean images. Locally: `--no-coastlines`, `--coast-width`. |
 | `graticule` | **on** | Faint, labelled lat/lon lines every 5° (labels on the top and left edges, clear of the caption), drawn under the winds and coastlines. Untick for a clean image. Locally: `--no-graticule`, `--grid-step` (degrees). The strength is the constant `GRATICULE_LINE_ALPHA` in the script. |
-| `fire` | **on** | **True Color only.** Mark fire pixels in red (see Fire pixels on True Color). Locally: `--no-fire`. |
+| `fire` | **on** | **True Color and Smoke RGB.** Mark fire pixels in red (see Fire pixels on True Color). Locally: `--no-fire`. |
 | `cloud_cue` | **on** | **Day Fire only.** Show cold cloud (10.4 µm below ~290 K) in grey so it stands apart from smoke (see Day Fire). Locally: `--no-cloud-cue`, `--cloud-bt`. |
-| `sun_correction` | **on** | **Day Fire only.** Divide the 0.86 and 0.64 µm channels by cos(sun zenith), capped at 80°, so brightness does not follow the sun (see Day Fire). Locally: `--no-sun-correction`. |
+| `sun_correction` | **on** | **Day Fire and Smoke RGB.** Divide the 0.86 and 0.64 µm channels by cos(sun zenith), capped at 80°, so brightness does not follow the sun (see Day Fire). Locally: `--no-sun-correction`. |
 | `rayleigh` | **on** | **True Color and the True Color base of IR Enhanced.** Apply Satpy's Rayleigh correction, which removes the blue atmospheric haze. It also applies the sun-zenith correction the modifier requires. Untick it for the plain JMA recipe, which is a bit faster. The first run downloads look-up tables; later runs reuse the cache. Day Fire never uses it. |
 
 Scan times are always UTC. Himawari data appear in the bucket roughly 20-30 min after the scan. The **0240 and 1440
@@ -158,6 +159,28 @@ of the caption box.
 - **Details:** B13 has 2 km pixels, so it is lightly Gaussian-smoothed (sigma 0.9 px) on the 1 km grid. True Color uses
   the same Rayleigh setting and gamma as the True Color product. Streamlines are white and coastlines green.
   The green coastline can be confused with the green of the -40 °C band; switch coastlines off for a clean look.
+
+### Smoke RGB
+
+A composite modelled on the ASMC (ASEAN Specialised Meteorological Centre) smoke/haze image: **red = visible, green = near-infrared, blue = long-wave infrared**,
+here B03 (0.64 µm), B04 (0.86 µm) and B13 (10.4 µm). Its purpose is to tell **low cloud, haze and smoke from thicker or higher cloud**.
+
+| Colour | Meaning |
+|---|---|
+| Yellow | Haze, smoke and low (warm) cloud: bright in the visible and near-infrared, no infrared signal |
+| White / blue-white | Thick or high (cold) cloud: bright in all three, the blue channel is the inverted 10.4 µm temperature |
+| Green | Land and vegetation (strong near-infrared) |
+| Very dark | Clear sea |
+| Red marks | Fire pixels from the 3.9 µm band (the same marks as on True Color) |
+
+- **Stretch:** the source gives no ranges, so they were tuned here on a smoky Sumatra scan (21 Oct 2026 08:00 UTC) and a Mekong burning-season scan
+  (15 Mar 2026 06:00 UTC): red B03 0-45 %, green B04 0-65 %, blue B13 305 K (0) to 220 K (1), all gamma 1 (`PRODUCTS["smoke"]` in the script). A plain 0-100 %
+  stretch came out dark with the haze barely visible. The inverted blue is done by giving the channel a minimum above its maximum.
+- **Sun-angle correction:** B03 and B04 are divided by cos(sun zenith), capped at 80°, per pixel, as in Day Fire, with the same `sun_correction` switch and the same low-sun
+  warning, so the haze keeps its colour as the sun gets low. It also brightens haze over the sea somewhat.
+- **Limits:** the colour assignment is not unique. Warm, thick low cloud and fog also come out yellow (the large yellow area over Yunnan and Guizhou on the Mekong scan), so use
+  the texture: smoke is smooth and streaky, cloud is lumpy. B13 has 2 km pixels, so the blue channel is a little blocky. Daytime only.
+- Winds are drawn white (orange is lost on yellow), coastlines magenta, as on Day Fire.
 
 ### Day Fire
 

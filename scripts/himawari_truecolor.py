@@ -67,7 +67,7 @@ PRODUCTS = {
         # (Sumatra 21 Oct 08:00 UTC: 435 px, 53 clusters, 4 px over sea; Mekong 15 Mar 06:00 UTC: 330 px, 29
         # clusters; 27 Oct 05:00 UTC: none). An addition: not an official fire product.
         fire_overlay=dict(bands=("B07", "B13"), min_k=325.0, anomaly_k=8.0, cold_k=280.0, min_diff_k=15.0,
-                          window_deg=0.15),
+                          window_deg=0.15),  # shared with the Smoke RGB below
         subdir="", coast_rgba=(40, 255, 70, 255)),
     # NOAA/CIRA "VIIRS Day Fire RGB" quick guide, with AHI band 7 (3.9 um, 2 km) for VIIRS 3.7 um (375 m).
     # The guide scales the red channel 0..60 C; here the minimum is raised to 27 C (300.15 K) because tropical
@@ -95,6 +95,23 @@ PRODUCTS = {
         channels=(("B03", _REFL, 0, 100, 1.7), ("B02", _REFL, 0, 100, 1.7), ("B01", _REFL, 0, 100, 1.7)),
         extra_bands=("B13",), ir=True, night_ok=True,
         subdir="ir", coast_rgba=(40, 255, 70, 255), wind_rgb=(255, 255, 255)),
+    # Smoke RGB after the ASMC (ASEAN Specialised Meteorological Centre) smoke/haze composite: red = visible, green =
+    # near-infrared, blue = long-wave infrared, here B03 (0.64 um), B04 (0.86 um) and B13 (10.4 um, inverted: min > max
+    # in the channel tuple scales it 305 K -> 0 ... 220 K -> 1, so cold cloud is bright blue). Land is green (strong NIR),
+    # smoke, haze and low warm cloud are yellow (visible + NIR, no infrared signal), thick or high cloud is white or
+    # blue-white. Its purpose is to tell low cloud and haze from thicker or higher cloud. The guide gives no stretch;
+    # these ranges (red 0-45 %, green 0-65 %, blue 305-220 K, gamma 1) were tuned on a smoky Sumatra scan and a
+    # Mekong burning-season scan. The 0.64/0.86 um channels get the same sun-angle correction as Day Fire; the red fire
+    # marks of True Color are overlaid.
+    "smoke": dict(
+        label="Smoke RGB", recipe="ASMC-style, AHI bands", uniform_gamma=False, rayleigh=False,
+        channels=(("B03", _REFL, 0, 45, 1.0), ("B04", _REFL, 0, 65, 1.0), ("B13", _BT, 305.0, 220.0, 1.0)),
+        sun_correction=dict(limit=80.0),
+        fire_overlay=dict(bands=("B07", "B13"), min_k=325.0, anomaly_k=8.0, cold_k=280.0, min_diff_k=15.0,
+                          window_deg=0.15),
+        caption="Smoke RGB (ASMC-style)  R B03 0-45%  G B04 0-65%  B B13 305-220K inverted",
+        notes=("Yellow: low cloud, haze, smoke  /  white, blue-white: thick or high cloud  /  green: land",),
+        subdir="smoke", coast_rgba=(255, 60, 255, 255), wind_rgb=(255, 255, 255)),
 }
 for _p in PRODUCTS.values():
     _p["bands"] = tuple(c[0] for c in _p["channels"])  # (R, G, B) bands
@@ -781,7 +798,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--grid-step", type=float, default=None,
                    help="graticule spacing in degrees (default: the region's, else 5)")
     p.add_argument("--fire", action=argparse.BooleanOptionalAction, default=True,
-                   help="true_color only: mark fire pixels (hot 3.9 um signal, see PRODUCTS['true_color']['fire_overlay']) "
+                   help="true_color and smoke only: mark fire pixels (hot 3.9 um signal, see PRODUCTS['true_color']['fire_overlay']) "
                         "in red (default on; an addition, not an official fire product)")
     p.add_argument("--cloud-cue", action=argparse.BooleanOptionalAction, default=True,
                    help="day_fire only: show cold cloud (10.4 um brightness temperature below ~290 K) in grey so it "
@@ -789,7 +806,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cloud-bt", type=float, default=None,
                    help="temperature in K where the cold-cloud grey starts (default 290); fully grey 10 K colder")
     p.add_argument("--sun-correction", action=argparse.BooleanOptionalAction, default=True,
-                   help="day_fire only: divide the 0.86/0.64 um channels by cos(sun zenith), capped at 80 deg, so "
+                   help="day_fire and smoke only: divide the 0.86/0.64 um channels by cos(sun zenith), capped at 80 deg, so "
                         "brightness does not follow the sun (default on; an addition to the NOAA/CIRA recipe)")
     p.add_argument("--low-sun-zenith", type=float, default=65.0,
                    help="warn (log, annotation, caption note) when the sun zenith at the bbox centre or its west/east "
@@ -950,7 +967,7 @@ def run(args) -> dict:
                 + (f", Rayleigh {'on' if use_rayleigh else 'off'}" if prod["rayleigh"] else ""))
             cue = cloud_cue_for(prod, args)
             sun = (scan, prod["sun_correction"]["limit"]) if prod.get("sun_correction") and args.sun_correction else None
-            notes, recipe_line, legend, day_frac = [], None, None, None
+            notes, recipe_line, legend, day_frac = list(prod.get("notes", ())), prod.get("caption"), None, None
             if prod.get("ir"):
                 _, width, height = target_area(bbox, args.resolution)
                 zen = zenith_grid(scan, bbox, args.resolution, width, height)

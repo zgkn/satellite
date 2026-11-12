@@ -47,7 +47,7 @@ def hotspot_mask(path: Path, bbox, resolution: float, shape) -> tuple["numpy.nda
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scan", required=True, help="Himawari scan time YYYYMMDDHHMM (UTC)")
-    ap.add_argument("--wind-run", required=True, help="ECMWF run YYYYMMDDHH (UTC; hours 00/06/12/18)")
+    ap.add_argument("--wind-run", default="", help="ECMWF run YYYYMMDDHH (UTC; hours 00/06/12/18); empty = no wind overlay")
     ap.add_argument("--wind-step", type=int, default=0, help="forecast step in hours (0 = analysis time; multiples of 3)")
     ap.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa")
     ap.add_argument("--hotspots", default="", help="CSV with lat, lon, frp_mw columns (optional)")
@@ -63,15 +63,17 @@ def main(argv=None) -> int:
         bbox = h.parse_bbox(args.bbox)
         segments = h.parse_segments(args.segments)
         scan = h.parse_scan_time(args.scan)
-        try:
+        init = None
+        if args.wind_run:
+          try:
             init = dt.datetime.strptime(args.wind_run, "%Y%m%d%H")
-        except ValueError:
+          except ValueError:
             raise h.UserError(f"wind-run must be YYYYMMDDHH, got {args.wind_run!r}")
-        if init.hour % ew.RUN_HOURS:
+        if init is not None and init.hour % ew.RUN_HOURS:
             raise h.UserError(f"ECMWF runs start at 00/06/12/18 UTC, got hour {init.hour:02d}")
-        if args.wind_step % ew.STEP_HOURS or not 0 <= args.wind_step <= ew.MAX_STEP:
+        if init is not None and (args.wind_step % ew.STEP_HOURS or not 0 <= args.wind_step <= ew.MAX_STEP):
             raise h.UserError(f"wind-step must be a multiple of {ew.STEP_HOURS} between 0 and {ew.MAX_STEP}")
-        if args.wind_level not in ew.PRESSURE_LEVELS:
+        if init is not None and args.wind_level not in ew.PRESSURE_LEVELS:
             raise h.UserError(f"wind-level must be one of {ew.PRESSURE_LEVELS}")
         if args.hotspots and not Path(args.hotspots).is_file():
             raise h.UserError(f"hotspot file not found: {args.hotspots}")
@@ -93,30 +95,32 @@ def main(argv=None) -> int:
     try:
         s3 = h.s3_client()
 
-        try:
-            fields, lon, lat = ew._retry(  # the bucket throttles ("SlowDown") in bursts: wait and try again, as the operational code does
-                f"{init:%d %b %HZ} step {args.wind_step} h",
-                lambda: ew._decode(ew._fetch_messages(s3, init, args.wind_step, args.wind_level), bbox, 1.0))
-        except Exception as exc:  # noqa: BLE001
-            h.annotate("error", f"Could not read ECMWF run {init:%Y-%m-%d %HZ} step {args.wind_step} h: "
-                       f"{type(exc).__name__}: {exc}")
-            return 2
-        wind = ew.WindField(lon=lon, lat=lat, u=fields["u"], v=fields["v"], below_ground=fields["sp"] < args.wind_level * 100.0,
-                            level=args.wind_level, init=init, step_lo=args.wind_step, step_hi=args.wind_step)
-        valid = init + dt.timedelta(hours=args.wind_step)
-        offset_h = (valid - scan.replace(tzinfo=None)).total_seconds() / 3600
-        what = "analysis" if args.wind_step == 0 else f"+{args.wind_step} h forecast"
-        side = "after" if offset_h > 0 else "before"
-        wind.describe = lambda: (f"ECMWF IFS {args.wind_level} hPa wind, {init:%d %b %HZ} {what} "
-                                 f"(valid {valid:%H}Z, {abs(offset_h):g} h {side} scan)")
-        h.log(f"Winds: {wind.describe()}")
+        wind = None
+        if init is not None:
+            try:
+                fields, lon, lat = ew._retry(  # the bucket throttles ("SlowDown") in bursts: wait and try again, as the operational code does
+                    f"{init:%d %b %HZ} step {args.wind_step} h",
+                    lambda: ew._decode(ew._fetch_messages(s3, init, args.wind_step, args.wind_level), bbox, 1.0))
+            except Exception as exc:  # noqa: BLE001
+                h.annotate("error", f"Could not read ECMWF run {init:%Y-%m-%d %HZ} step {args.wind_step} h: "
+                           f"{type(exc).__name__}: {exc}")
+                return 2
+            wind = ew.WindField(lon=lon, lat=lat, u=fields["u"], v=fields["v"], below_ground=fields["sp"] < args.wind_level * 100.0,
+                                level=args.wind_level, init=init, step_lo=args.wind_step, step_hi=args.wind_step)
+            valid = init + dt.timedelta(hours=args.wind_step)
+            offset_h = (valid - scan.replace(tzinfo=None)).total_seconds() / 3600
+            what = "analysis" if args.wind_step == 0 else f"+{args.wind_step} h forecast"
+            side = "after" if offset_h > 0 else "before"
+            wind.describe = lambda: (f"ECMWF IFS {args.wind_level} hPa wind, {init:%d %b %HZ} {what} "
+                                     f"(valid {valid:%H}Z, {abs(offset_h):g} h {side} scan)")
+            h.log(f"Winds: {wind.describe()}")
 
         scan_found, keys = h.select_scan(s3, segments, scan, 3, ["B01", "B02", "B03"])
         files = h.download(s3, keys, work / "hsd")
         prod = h.PRODUCTS["true_color"]
         gammas = tuple(c[4] for c in prod["channels"])
         rgb = h.make_rgb(files, bbox, args.resolution, prod, gammas, args.rayleigh)
-        notes = [f"Ad-hoc plot: winds are not time-matched to the scan; Rayleigh {'on' if args.rayleigh else 'off'}"]
+        notes = [f"Ad-hoc plot: winds are not time-matched to the scan; Rayleigh {'on' if args.rayleigh else 'off'}"] if wind else [f"Ad-hoc plot; Rayleigh {'on' if args.rayleigh else 'off'}"]
 
         fire = None
         tag = ""
@@ -128,7 +132,8 @@ def main(argv=None) -> int:
                           (255, 110, 110, 255)))
             tag = "_hotspots"
 
-        png = out / f"{scan:%Y%m%d_%H%M}_truecolor_winds{init:%Y%m%d%H}_s{args.wind_step:02d}{tag}{'' if args.rayleigh else '_noray'}.png"
+        wtag = f"_winds{init:%Y%m%d%H}_s{args.wind_step:02d}" if init is not None else ""
+        png = out / f"{scan:%Y%m%d_%H%M}_truecolor{wtag}{tag}{'' if args.rayleigh else '_noray'}.png"
         h.overlay_and_save(rgb, scan, prod, gammas, args.rayleigh, png, bbox, args.resolution, 1.5, wind, 45.0,
                            notes, "bottom-right", 5.0, fire_mask=fire)
         h.log(f"Wrote {png} ({png.stat().st_size / 1e6:.1f} MB)")

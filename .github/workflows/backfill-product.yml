@@ -1,0 +1,155 @@
+name: Himawari backfill product
+
+# Gives a newly added product (default: smoke) the same time series as True Color: for every region it builds the product for
+# each True Color scan that has no image of it yet on the output branch, then publishes them all in ONE commit.
+# Separate from the operational "Himawari RGB" workflow and its scripts (it only runs them). The building jobs take no lock,
+# so the hourly runs are not held up; only the short publish job waits for the output branch (same group as the hourly runs).
+# Manual only.
+on:
+  workflow_dispatch:
+    inputs:
+      product:
+        description: "Product to backfill (needs a daytime scan; True Color's scan times are used)"
+        required: false
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - day_fire
+      regions:
+        description: "Regions, comma separated"
+        required: false
+        default: "sumatra_borneo,mekong,papua"
+        type: string
+      winds:
+        description: "Draw the ECMWF streamlines on the backfilled images (as the live ones have)"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      count: ${{ steps.plan.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Plan the missing scans
+        id: plan
+        env:
+          IN_PRODUCT: ${{ inputs.product }}
+          IN_REGIONS: ${{ inputs.regions }}
+        run: |
+          git fetch --depth=1 origin himawari-output
+          git ls-tree -r --name-only FETCH_HEAD > tree.txt
+          matrix=$(python3 scripts/backfill_plan.py tree.txt --product "$IN_PRODUCT" --regions "$IN_REGIONS")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "count=$(echo "$matrix" | jq 'length')" >> "$GITHUB_OUTPUT"
+          echo "$matrix" | jq -c '.[]'
+
+  build:
+    needs: plan
+    if: ${{ needs.plan.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Make sure bzip2 is available
+        run: command -v bzip2 >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq bzip2; }
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      - name: Build the scans
+        env:
+          IN_PRODUCT: ${{ inputs.product }}
+          IN_WINDS: ${{ inputs.winds }}
+          REGION: ${{ matrix.region }}
+          SCANS: ${{ matrix.scans }}
+        run: |
+          mkdir -p output
+          ok=0; failed=0
+          for scan in ${SCANS//,/ }; do
+            args=(--region "$REGION" --datetime-utc "$scan" --product "$IN_PRODUCT" --outdir output --workdir "$RUNNER_TEMP" --json-out "$RUNNER_TEMP/res-$scan.json")
+            if [ "$IN_WINDS" = "true" ]; then args+=(--winds); else args+=(--no-winds); fi
+            if python scripts/himawari_truecolor.py "${args[@]}"; then ok=$((ok+1)); else failed=$((failed+1)); echo "::warning::scan $scan ($REGION) could not be built"; fi
+          done
+          echo "built $ok scan(s), $failed failed"
+          find output -name '*.png' | sort
+
+      - name: Upload the images
+        uses: actions/upload-artifact@v4
+        with:
+          name: backfill-${{ matrix.region }}-${{ strategy.job-index }}
+          path: output/
+          if-no-files-found: warn
+          retention-days: 3
+
+  publish:
+    needs: build
+    if: ${{ always() && needs.build.result != 'skipped' && needs.build.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: himawari-output
+      cancel-in-progress: false
+    env:
+      OUTPUT_BRANCH: himawari-output
+      KEEP_DAYS: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install what the site builder needs
+        run: pip install pillow
+      - name: Download the images
+        uses: actions/download-artifact@v4
+        with:
+          pattern: backfill-*
+          path: backfilled
+          merge-multiple: true
+      - name: Publish to the output branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pub="$RUNNER_TEMP/publish"
+          rm -rf "$pub"; mkdir -p "$pub"
+          git fetch --depth=1 origin "$OUTPUT_BRANCH"
+          git archive FETCH_HEAD | tar -x -C "$pub"
+          # Add the backfilled images; never overwrite an image that is already there.
+          added=0
+          while IFS= read -r f; do
+            rel="${f#backfilled/}"
+            if [ ! -e "$pub/$rel" ]; then mkdir -p "$pub/$(dirname "$rel")"; cp "$f" "$pub/$rel"; added=$((added+1)); fi
+          done < <(find backfilled -name '[0-9]*_[0-9]*.png' | sort)
+          echo "Added $added image(s)"
+          # latest.png = the newest image of every folder that gained some
+          for dir in $(find backfilled -name '[0-9]*_[0-9]*.png' -exec dirname {} \; | sort -u | sed 's#^backfilled/\?##'); do
+            newest=$(ls "$pub/${dir:+$dir/}" | grep -E '^[0-9]{8}_[0-9]{4}\.png$' | sort | tail -1)
+            cp "$pub/${dir:+$dir/}$newest" "$pub/${dir:+$dir/}latest.png"
+          done
+          mapfile -t just_added < <(find backfilled -name '[0-9]*_[0-9]*.png' -exec basename {} \; | sort -u)
+          python scripts/housekeeping.py "$pub" --max-age-days "$KEEP_DAYS" --keep "${just_added[@]}"
+          python scripts/build_site.py "$pub"
+          cd "$pub"
+          git init -q -b "$OUTPUT_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Backfill ${{ inputs.product }}: $added image(s)"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$OUTPUT_BRANCH"
+          echo "Pushed $(find . -name '*.png' | wc -l) PNGs to $OUTPUT_BRANCH"

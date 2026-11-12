@@ -16,13 +16,18 @@ corrections). True Color and Day Fire are daytime only; IR Enhanced also runs at
 
 ### Regions
 
-The same three products are built for two regions, chosen with the `region` input (`--region` locally). Each run builds
+The same three products are built for three regions, chosen with the `region` input (`--region` locally). Each run builds
 one region; the website has a tab per region (the choice is remembered in the browser).
 
 | Region | Default box (`west,south,east,north`) | Segments | Image size | Caption box | Files on the output branch |
 |---|---|---|---|---|---|
 | `sumatra_borneo` | `94.5,-6.5,119.5,7.5` (Sumatra, Malay Peninsula, Singapore, Borneo) | 5-6 | 2500 × 1400 | bottom-right | top level, `dayfire/`, `ir/` |
 | `mekong` | `92,6,110.5,29` (Myanmar, Thailand, Laos, Cambodia, Vietnam, Yunnan) | 3-5 | 1850 × 2300 | top-right | `mekong/`, `mekong/dayfire/`, `mekong/ir/` |
+| `papua` | `132,-11,141,0` (western New Guinea and the Arafura Sea) | 6-7 | 900 × 1100 | bottom-right | `papua/`, `papua/dayfire/`, `papua/ir/` |
+
+Notes on Papua: the box is small (9° × 11°), so the images are 900 × 1100 px at the default 0.01° (use `resolution` 0.005 for a larger, finer
+picture); the graticule is drawn every 2° instead of 5° (`--grid-step` overrides the region's value), and the caption sits in the Arafura Sea.
+It needs segments 6-7. The tab's anchors on the website are `#papua-truecolor`, `#papua-ir`, `#papua-dayfire`.
 
 Notes on Mekong:
 - The caption sits top-right (southern China) because bottom-right would cover the Mekong delta and bottom-left southern

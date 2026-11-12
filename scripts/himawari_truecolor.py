@@ -107,6 +107,9 @@ REGIONS = {
                            segments="5-6", subdir="", caption_corner="bottom-right"),
     "mekong": dict(label="Mekong sub-region", bbox="92,6,110.5,29", segments="3-5", subdir="mekong",
                    caption_corner="top-right"),
+    # Papua: the caption sits bottom-right, over the Arafura Sea; the box is small, so the graticule is every 2 degrees.
+    "papua": dict(label="Papua", bbox="132,-11,141,0", segments="6-7", subdir="papua",
+                  caption_corner="bottom-right", grid_step=2.0),
 }
 N_SEGMENTS = 10  # full disk is split into 10 equal N-S segments, 01 = north
 # Full-disk extent in geostationary projection y (metres, +north).  Verified
@@ -775,7 +778,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--coast-width", type=float, default=1.5, help="coastline width in output pixels")
     p.add_argument("--graticule", action=argparse.BooleanOptionalAction, default=True,
                    help="draw faint, labelled lat/lon lines (default on)")
-    p.add_argument("--grid-step", type=float, default=5.0, help="graticule spacing in degrees (default 5)")
+    p.add_argument("--grid-step", type=float, default=None,
+                   help="graticule spacing in degrees (default: the region's, else 5)")
     p.add_argument("--fire", action=argparse.BooleanOptionalAction, default=True,
                    help="true_color only: mark fire pixels (hot 3.9 um signal, see PRODUCTS['true_color']['fire_overlay']) "
                         "in red (default on; an addition, not an official fire product)")
@@ -820,8 +824,9 @@ def run(args) -> dict:
         raise UserError(f"gamma must be between 0.2 and 5, got {args.gamma}")
     if args.cloud_bt is not None and not 250 <= args.cloud_bt <= 320:
         raise UserError(f"cloud-bt must be between 250 and 320 K, got {args.cloud_bt}")
-    if args.graticule and not 0.5 <= args.grid_step <= 30:
-        raise UserError(f"grid-step must be between 0.5 and 30 degrees, got {args.grid_step}")
+    grid_step_deg = args.grid_step if args.grid_step is not None else region.get("grid_step", 5.0)
+    if args.graticule and not 0.5 <= grid_step_deg <= 30:
+        raise UserError(f"grid-step must be between 0.5 and 30 degrees, got {grid_step_deg}")
     if not 30 <= args.low_sun_zenith <= 90:
         raise UserError(f"low-sun-zenith must be between 30 and 90 degrees, got {args.low_sun_zenith}")
     products = list(PRODUCTS) if args.product == "all" else [args.product]
@@ -931,7 +936,7 @@ def run(args) -> dict:
                 annotate("warning", f"Wind streamlines skipped ({type(exc).__name__}: {exc}); "
                          "the images are published without them.")
         coast_width = args.coast_width if args.coastlines else 0.0
-        grid_step = args.grid_step if args.graticule else 0.0
+        grid_step = grid_step_deg if args.graticule else 0.0
         for name in products:
             prod = PRODUCTS[name]
             gammas = tuple(c[4] for c in prod["channels"])

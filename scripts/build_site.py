@@ -48,6 +48,8 @@ REGION_TABS = (
          sub="Sumatra, Malay Peninsula, Singapore and Borneo"),
     dict(key="mekong", title="Mekong", dir="mekong",
          sub="Mekong sub-region: Myanmar, Thailand, Laos, Cambodia, Vietnam and Yunnan"),
+    dict(key="papua", title="Papua", dir="papua",
+         sub="Papua: the western half of New Guinea and the Arafura Sea (132-141&deg;E, 11&deg;S-0&deg;N)"),
 )
 
 SECTIONS = (

@@ -29,7 +29,7 @@ on:
       hotspot_label:
         description: "Caption text for the hotspots, e.g. 13 Oct 2026; empty = the scan day (for a series)"
         required: false
-        default: "14 Oct 2026"
+        default: ""
         type: string
       caption:
         description: "Draw the caption box"

@@ -52,6 +52,7 @@ def main(argv=None) -> int:
     ap.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa")
     ap.add_argument("--hotspots", default="", help="CSV with lat, lon, frp_mw columns (optional)")
     ap.add_argument("--hotspot-label", default="", help="text for the caption, e.g. '13 Oct 2026'")
+    ap.add_argument("--no-caption", action="store_true", help="leave out the caption box")
     ap.add_argument("--bbox", default="94.5,-6.5,119.5,7.5")
     ap.add_argument("--segments", default="5-6")
     ap.add_argument("--resolution", type=float, default=0.01)
@@ -133,9 +134,9 @@ def main(argv=None) -> int:
             tag = "_hotspots"
 
         wtag = f"_winds{init:%Y%m%d%H}_s{args.wind_step:02d}" if init is not None else ""
-        png = out / f"{scan:%Y%m%d_%H%M}_truecolor{wtag}{tag}{'' if args.rayleigh else '_noray'}.png"
+        png = out / f"{scan:%Y%m%d_%H%M}_truecolor{wtag}{tag}{'_nocaption' if args.no_caption else ''}{'' if args.rayleigh else '_noray'}.png"
         h.overlay_and_save(rgb, scan, prod, gammas, args.rayleigh, png, bbox, args.resolution, 1.5, wind, 45.0,
-                           notes, "bottom-right", 5.0, fire_mask=fire)
+                           notes, "bottom-right", 5.0, fire_mask=fire, caption=not args.no_caption)
         h.log(f"Wrote {png} ({png.stat().st_size / 1e6:.1f} MB)")
     finally:
         shutil.rmtree(work, ignore_errors=True)

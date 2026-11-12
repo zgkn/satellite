@@ -678,7 +678,8 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
                      bbox=None, resolution=None, coast_width: float = 0.0,
                      wind=None, wind_spacing: float = 45.0, notes=(),
                      corner: str = "bottom-right", grid_step: float = 0.0,
-                     recipe_line: str | None = None, legend: dict | None = None, fire_mask=None) -> None:
+                     recipe_line: str | None = None, legend: dict | None = None, fire_mask=None,
+                     caption: bool = True) -> None:
     """Draw graticule, streamlines, coastlines and the caption onto ``rgb`` and save it as ``out``.
 
     ``recipe_line`` replaces the caption's third line (the recipe summary); ``legend`` is a colour bar drawn at the
@@ -697,6 +698,10 @@ def overlay_and_save(rgb, scan: dt.datetime, product: dict, gammas, rayleigh: bo
         draw_coastline(img, bbox, resolution, coast_width, product["coast_rgba"])
     if fire_mask is not None and fire_mask.any():
         img = draw_fire(img, fire_mask, resolution)
+    if not caption:  # ad-hoc plots only: image, graticule and coastlines, no text box
+        out.parent.mkdir(parents=True, exist_ok=True)
+        img.convert("RGB").save(out, optimize=True)
+        return
     h = min(rgb.shape[0], 0.56 * rgb.shape[1])  # the default 25 x 14 box gives h = height; tall boxes keep the text size
     size = max(12, round(h / 48))
     big, small = _font(size), _font(round(size * 0.8))

@@ -31,6 +31,11 @@ on:
         required: false
         default: "14 Oct 2026"
         type: string
+      caption:
+        description: "Draw the caption box"
+        required: false
+        default: true
+        type: boolean
       rayleigh:
         description: "Apply Rayleigh correction (as the operational True Color does)"
         required: false
@@ -80,12 +85,14 @@ jobs:
           IN_WIND_RUN: ${{ inputs.wind_run_utc }}
           IN_WIND_STEP: ${{ inputs.wind_step }}
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
+          IN_CAPTION: ${{ inputs.caption }}
           IN_HOTSPOTS: ${{ inputs.hotspots_csv }}
           IN_HOTSPOT_LABEL: ${{ inputs.hotspot_label }}
         run: |
           args=(--scan "$IN_SCAN" --wind-step "$IN_WIND_STEP" --outdir output-adhoc)
           if [ -n "$IN_WIND_RUN" ]; then args+=(--wind-run "$IN_WIND_RUN"); fi
           if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
+          if [ "$IN_CAPTION" != "true" ]; then args+=(--no-caption); fi
           if [ -n "$IN_HOTSPOTS" ]; then args+=(--hotspots "$IN_HOTSPOTS" --hotspot-label "$IN_HOTSPOT_LABEL"); fi
           python scripts/adhoc_truecolor_winds_hotspots.py "${args[@]}"
 

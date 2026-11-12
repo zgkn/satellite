@@ -31,6 +31,11 @@ on:
         required: false
         default: ""
         type: string
+      hotspot_desc:
+        description: "Caption text for the hotspots ({label} = the label); empty = the high-confidence VIIRS text"
+        required: false
+        default: ""
+        type: string
       caption:
         description: "Draw the caption box"
         required: false
@@ -86,6 +91,7 @@ jobs:
           IN_WIND_STEP: ${{ inputs.wind_step }}
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
           IN_CAPTION: ${{ inputs.caption }}
+          IN_HOTSPOT_DESC: ${{ inputs.hotspot_desc }}
           IN_HOTSPOTS: ${{ inputs.hotspots_csv }}
           IN_HOTSPOT_LABEL: ${{ inputs.hotspot_label }}
         run: |
@@ -99,6 +105,7 @@ jobs:
             if [ "$IN_CAPTION" != "true" ]; then args+=(--no-caption); fi
             if [ -n "$IN_HOTSPOTS" ] && [ "$IN_HOTSPOTS" != "none" ]; then
               label="$IN_HOTSPOT_LABEL"; [ -z "$label" ] && label="$(date -d "$d" +'%-d %b %Y')"
+              if [ -n "$IN_HOTSPOT_DESC" ]; then args+=(--hotspot-desc "$IN_HOTSPOT_DESC"); fi
               args+=(--hotspots "${IN_HOTSPOTS//\{date\}/$d}" --hotspot-label "$label")
             fi
             echo "::group::scan $scan"

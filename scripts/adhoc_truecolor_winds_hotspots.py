@@ -52,6 +52,8 @@ def main(argv=None) -> int:
     ap.add_argument("--wind-level", type=int, default=925, help="pressure level in hPa")
     ap.add_argument("--hotspots", default="", help="CSV with lat, lon, frp_mw columns (optional)")
     ap.add_argument("--hotspot-label", default="", help="text for the caption, e.g. '13 Oct 2026'")
+    ap.add_argument("--hotspot-desc", default="VIIRS high-confidence daytime hotspots {label} (NOAA-20/21, all passes that day)",
+                    help="caption text for the hotspots; {label} is replaced by --hotspot-label")
     ap.add_argument("--no-caption", action="store_true", help="leave out the caption box")
     ap.add_argument("--bbox", default="94.5,-6.5,119.5,7.5")
     ap.add_argument("--segments", default="5-6")
@@ -129,7 +131,7 @@ def main(argv=None) -> int:
             fire, inside, total = hotspot_mask(Path(args.hotspots), bbox, args.resolution, rgb.shape[:2])
             h.log(f"Hotspots: {inside} of {total} inside the box")
             label = f" {args.hotspot_label}" if args.hotspot_label else ""
-            notes.append((f"Red: VIIRS high-confidence daytime hotspots{label} (NOAA-20/21, all passes that day): {inside}",
+            notes.append((f"Red: {args.hotspot_desc.format(label=args.hotspot_label)}: {inside}",
                           (255, 110, 110, 255)))
             tag = "_hotspots"
 

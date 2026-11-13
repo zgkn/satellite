@@ -17,8 +17,8 @@ corrections). True Color, Day Fire and Smoke RGB are daytime only; IR Enhanced a
 
 ### Regions
 
-The same four products are built for three regions, chosen with the `region` input (`--region` locally). A run builds one region,
-or **`all`** builds the three one after the other in a single run (about 12-15 min) and publishes once. Use `all` for scheduled runs:
+The same four products are built for three regions, chosen with the `region` input (`--region` locally). The workflow's default is **`all`**: it builds the three one after the other in a
+single run (about 12-15 min) and publishes once; pick one region to build just that (about 6 min). Use `all` for scheduled runs:
 the workflow lock lets only one run wait, so several runs dispatched at once cannot all run (one is cancelled). With `all`, `bbox` and `segments`
 are ignored, a region that fails does not stop the others (the run only fails if every region failed), and the job summary has one block per region; the website has a tab per region (the choice is remembered in the browser).
 
@@ -101,7 +101,7 @@ full-size PNGs (about 6 MB each) load only when the slider scrolls into view.
 |---|---|---|
 | `datetime_utc` | blank | Scan time **in UTC**, `YYYYMMDDHHMM`, minute ending in 0 (scans are every 10 min). Blank = newest complete scan from the last ~3 h. Examples: 08:00 SGT = `0000` UTC, 10:00 SGT = `0200` UTC, so `202610210200`. |
 | `product` | `all` | `true_color`, `ir_enhanced`, `day_fire`, `smoke` or `all`. With several, shared files (B03, B13) and the winds are fetched once. At night (sun below the horizon at the bbox centre) only `ir_enhanced` is made; the others are skipped with a notice. |
-| `region` | `sumatra_borneo` | `sumatra_borneo` or `mekong` (see Regions). |
+| `region` | `all` | `all`, `sumatra_borneo`, `mekong` or `papua` (see Regions). The script's own `--region` default is still `sumatra_borneo`. |
 | `bbox` | blank | `west,south,east,north` in degrees. Blank = the region's box (default Sumatra-Borneo covers Sumatra, Peninsular Malaysia, Singapore and Borneo). A smaller box gives a smaller image at the same pixel size; add a finer `resolution` (e.g. `0.005`) to enlarge a fire area. B07 itself only has 2 km pixels. |
 | `gamma` | blank | True Color gamma override. Blank = 1.7, as in the JMA guide. Try `2.0` for hazy scenes. `day_fire` ignores it (its recipe has different gammas per channel). |
 | `segments` | blank | Full-disk segments to download (1 = north … 10 = south). Blank = the region's (5-6 cover roughly 10°N-10°S, 3-5 roughly 6°S-30°N). |

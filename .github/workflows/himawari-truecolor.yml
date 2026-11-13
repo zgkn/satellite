@@ -23,7 +23,7 @@ on:
           - day_fire
           - smoke
       region:
-        description: "Which region: sumatra_borneo (Sumatra, Malay Peninsula, Singapore, Borneo), mekong (Mekong sub-region) or papua (132-141E, 11S-0N). Each is published to its own tab on the website"
+        description: "Which region: sumatra_borneo (Sumatra, Malay Peninsula, Singapore, Borneo), mekong (Mekong sub-region), papua (132-141E, 11S-0N) or all (the three, one after the other in this run, published once). Each region has its own tab on the website"
         required: false
         default: sumatra_borneo
         type: choice
@@ -31,6 +31,7 @@ on:
           - sumatra_borneo
           - mekong
           - papua
+          - all
       bbox:
         description: "Box west,south,east,north in degrees. Blank = the region's (sumatra_borneo 94.5,-6.5,119.5,7.5; mekong 92,6,110.5,29; papua 132,-11,141,0)"
         required: false
@@ -98,7 +99,7 @@ permissions:
 jobs:
   rgb:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60  # region "all" builds three regions one after the other
     env:
       OUTPUT_BRANCH: himawari-output
       KEEP_DAYS: "2"  # published images older than this many days are removed (scripts/housekeeping.py)
@@ -145,26 +146,58 @@ jobs:
           IN_CLOUD_CUE: ${{ inputs.cloud_cue }}
           IN_SUN_CORRECTION: ${{ inputs.sun_correction }}
         run: |
-          args=(
-            --datetime-utc "$IN_DATETIME"
-            --product "$IN_PRODUCT"
-            --region "$IN_REGION"
-            --resolution "$IN_RESOLUTION"
-            --outdir output
-            --workdir "$RUNNER_TEMP"
-            --json-out output/result.json
-          )
-          if [ -n "${IN_BBOX// /}" ]; then args+=(--bbox "$IN_BBOX"); fi
-          if [ -n "${IN_SEGMENTS// /}" ]; then args+=(--segments "$IN_SEGMENTS"); fi
-          if [ -n "${IN_GAMMA// /}" ]; then args+=(--gamma "$IN_GAMMA"); fi
-          if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
-          if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
-          if [ "$IN_WINDS" = "true" ]; then args+=(--winds); else args+=(--no-winds); fi
-          if [ "$IN_GRATICULE" = "true" ]; then args+=(--graticule); else args+=(--no-graticule); fi
-          if [ "$IN_FIRE" = "true" ]; then args+=(--fire); else args+=(--no-fire); fi
-          if [ "$IN_CLOUD_CUE" = "true" ]; then args+=(--cloud-cue); else args+=(--no-cloud-cue); fi
-          if [ "$IN_SUN_CORRECTION" = "true" ]; then args+=(--sun-correction); else args+=(--no-sun-correction); fi
-          python scripts/himawari_truecolor.py "${args[@]}"
+          # One region, or "all" = the three regions one after the other in this run (one dispatch, one publish: several
+          # dispatches at once cannot all run, the workflow lock keeps only one run waiting).
+          if [ "$IN_REGION" = "all" ]; then
+            regions=(sumatra_borneo mekong papua)
+            if [ -n "${IN_BBOX// /}${IN_SEGMENTS// /}" ]; then echo "::warning::bbox and segments are ignored with region all"; fi
+          else
+            regions=("$IN_REGION")
+          fi
+          mkdir -p output
+          for region in "${regions[@]}"; do
+            echo "::group::Region $region"
+            args=(
+              --datetime-utc "$IN_DATETIME"
+              --product "$IN_PRODUCT"
+              --region "$region"
+              --resolution "$IN_RESOLUTION"
+              --outdir output
+              --workdir "$RUNNER_TEMP"
+              --json-out "output/result-$region.json"
+            )
+            if [ "$IN_REGION" != "all" ]; then
+              if [ -n "${IN_BBOX// /}" ]; then args+=(--bbox "$IN_BBOX"); fi
+              if [ -n "${IN_SEGMENTS// /}" ]; then args+=(--segments "$IN_SEGMENTS"); fi
+            fi
+            if [ -n "${IN_GAMMA// /}" ]; then args+=(--gamma "$IN_GAMMA"); fi
+            if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
+            if [ "$IN_COASTLINES" = "true" ]; then args+=(--coastlines); else args+=(--no-coastlines); fi
+            if [ "$IN_WINDS" = "true" ]; then args+=(--winds); else args+=(--no-winds); fi
+            if [ "$IN_GRATICULE" = "true" ]; then args+=(--graticule); else args+=(--no-graticule); fi
+            if [ "$IN_FIRE" = "true" ]; then args+=(--fire); else args+=(--no-fire); fi
+            if [ "$IN_CLOUD_CUE" = "true" ]; then args+=(--cloud-cue); else args+=(--no-cloud-cue); fi
+            if [ "$IN_SUN_CORRECTION" = "true" ]; then args+=(--sun-correction); else args+=(--no-sun-correction); fi
+            python scripts/himawari_truecolor.py "${args[@]}" || echo "::warning::region $region exited with status $?"
+            if [ ! -f "output/result-$region.json" ]; then
+              jq -n --arg r "$region" '{status:"error", region:$r, message:"see the log"}' > "output/result-$region.json"
+            else  # error results written by the script carry no region
+              jq --arg r "$region" '.region = (.region // $r)' "output/result-$region.json" > "output/result-$region.tmp" && mv "output/result-$region.tmp" "output/result-$region.json"
+            fi
+            echo "::endgroup::"
+          done
+          # One combined result for the steps below: ok if any region made images, else skipped_night, else error.
+          jq -s '{
+            status: (if any(.[]; .status == "ok") then "ok" elif any(.[]; .status == "skipped_night") then "skipped_night" else "error" end),
+            region: (map(.region // empty) | unique | if length > 1 then "all" else (.[0] // "") end),
+            scan_utc_iso: (([.[] | select(.status == "ok") | .scan_utc_iso] | first) // (.[0].scan_utc_iso // "")),
+            scan_sgt_iso: (([.[] | select(.status == "ok") | .scan_sgt_iso] | first) // (.[0].scan_sgt_iso // "")),
+            message: ([.[] | select(.status == "error") | .message] | join("; ")),
+            outputs: ([.[] | .outputs // []] | add // [])
+          }' output/result-*.json > output/result.json
+          jq -c '{status, region, scan_utc_iso, n_outputs: (.outputs | length)}' output/result.json
+          # Fail the step only when no region made anything (a single failing region fails as it always did).
+          if [ "$(jq -r .status output/result.json)" = "error" ]; then exit 1; fi
 
       - name: Read result
         id: result
@@ -235,17 +268,15 @@ jobs:
       - name: Job summary
         if: ${{ always() }}
         env:
-          STATUS: ${{ steps.result.outputs.status }}
           SERVER: ${{ github.server_url }}
           REPO: ${{ github.repository }}
         run: |
-          r=output/result.json
           owner="${REPO%%/*}"; repo_name="${REPO#*/}"
-          {
-            echo "## Himawari-9 RGB"
-            case "$STATUS" in
+          report() {
+            r=$1
+            echo "### Region: $(jq -r '.region // "?"' $r)"
+            case "$(jq -r .status $r)" in
               ok)
-                echo "**Region:** $(jq -r .region $r)  "
                 echo "**Scan:** $(jq -r .scan_utc_iso $r) / $(jq -r .scan_sgt_iso $r)  "
                 echo "**Sun zenith at bbox centre:** $(jq -r .sun_zenith_centre $r)°  "
                 echo "**Segments:** $(jq -r '.segments | map(tostring) | join(",")' $r), bands $(jq -r '.bands | join("/")' $r) (all files present)  "
@@ -259,9 +290,6 @@ jobs:
                   name=$(basename "$png"); path="${sub:+$sub/}"
                   echo "- **$label** ($size px): [\`$OUTPUT_BRANCH:$path$name\`]($SERVER/$REPO/blob/$OUTPUT_BRANCH/$path$name), [latest]($SERVER/$REPO/blob/$OUTPUT_BRANCH/${path}latest.png)"
                 done < <(jq -r '.outputs[] | [.label, .png, .subdir, "\(.size_px[0])x\(.size_px[1])"] | join("|")' $r)
-                echo
-                echo "- Website: https://$owner.github.io/$repo_name/"
-                echo "- Also attached to this run as an artifact."
                 ;;
               skipped_night)
                 echo "**Skipped (night):** scan $(jq -r .scan_utc_iso $r) / $(jq -r .scan_sgt_iso $r)," \
@@ -271,4 +299,15 @@ jobs:
                 echo "**Failed.** $(jq -r '.message // "see the log"' $r 2>/dev/null || echo "see the log")"
                 ;;
             esac
+            echo
+          }
+          {
+            echo "## Himawari-9 RGB"
+            if ls output/result-*.json >/dev/null 2>&1; then
+              for f in output/result-*.json; do report "$f"; done
+              echo "- Website: https://$owner.github.io/$repo_name/"
+              echo "- Also attached to this run as an artifact."
+            else
+              echo "**Failed.** No result was written; see the log."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

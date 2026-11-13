@@ -17,8 +17,10 @@ corrections). True Color, Day Fire and Smoke RGB are daytime only; IR Enhanced a
 
 ### Regions
 
-The same four products are built for three regions, chosen with the `region` input (`--region` locally). Each run builds
-one region; the website has a tab per region (the choice is remembered in the browser).
+The same four products are built for three regions, chosen with the `region` input (`--region` locally). A run builds one region,
+or **`all`** builds the three one after the other in a single run (about 12-15 min) and publishes once. Use `all` for scheduled runs:
+the workflow lock lets only one run wait, so several runs dispatched at once cannot all run (one is cancelled). With `all`, `bbox` and `segments`
+are ignored, a region that fails does not stop the others (the run only fails if every region failed), and the job summary has one block per region; the website has a tab per region (the choice is remembered in the browser).
 
 | Region | Default box (`west,south,east,north`) | Segments | Image size | Caption box | Files on the output branch |
 |---|---|---|---|---|---|

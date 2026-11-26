@@ -54,6 +54,11 @@ on:
         required: false
         default: true
         type: boolean
+      smoke_stretch:
+        description: "Smoke RGB only: brighter look as RED_MAX,GREEN_MAX,GAMMA (e.g. 25,40,1.3; operational is 45,65,1). Empty = operational. Files get _bright in their name"
+        required: false
+        default: ""
+        type: string
       minimal_caption:
         description: "Caption with only the satellite name and the timestamp (no recipe line, notes or legend)"
         required: false
@@ -109,6 +114,7 @@ jobs:
           IN_FIRE: ${{ inputs.fire }}
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
           IN_MINIMAL: ${{ inputs.minimal_caption }}
+          IN_STRETCH: ${{ inputs.smoke_stretch }}
         run: |
           set -uo pipefail
           [[ "$IN_NAME" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "::error::name may only hold letters, digits, - and _"; exit 2; }
@@ -122,10 +128,12 @@ jobs:
             if [ "$IN_FIRE" = "true" ]; then args+=(--fire); else args+=(--no-fire); fi
             if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
             if [ "$IN_MINIMAL" = "true" ]; then args+=(--minimal-caption); fi
+            tag=""
+            if [ -n "$IN_STRETCH" ] && [ "$prod" = "smoke" ]; then args+=(--smoke-stretch "$IN_STRETCH"); tag="_bright"; fi
             if python scripts/adhoc_products.py "${args[@]}"; then
               # the scan's own PNG (not latest.png, not thumbs/previews) -> <name>/<scan>_<product>.png
               f=$(find "$RUNNER_TEMP/build-$prod" -name '[0-9]*_[0-9]*.png' -not -path '*/thumbs/*' -not -path '*/previews/*' | head -n 1)
-              if [ -n "$f" ]; then cp "$f" "adhoc-out/$IN_NAME/$(basename "${f%.png}")_$prod.png"; else echo "::warning::$prod: no image produced"; failed=1; fi
+              if [ -n "$f" ]; then cp "$f" "adhoc-out/$IN_NAME/$(basename "${f%.png}")_${prod}${tag}.png"; else echo "::warning::$prod: no image produced"; failed=1; fi
             else
               echo "::warning::$prod failed"; failed=1
             fi

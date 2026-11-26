@@ -1,6 +1,7 @@
 name: Himawari ad-hoc products (any box)
 
-# Separate from the operational "Himawari RGB" workflow: it only RUNS the operational script (unchanged) with its own box and
+# Separate from the operational "Himawari RGB" workflow: it only RUNS the operational script (unchanged, through the small
+# wrapper scripts/adhoc_products.py that can shorten the caption) with its own box and
 # scan time and writes into its own folder. Nothing here touches himawari-output, its images, housekeeping or site, and it uses its
 # own concurrency group, so the hourly runs are not held up. Results go to the artifact and to the orphan branch himawari-adhoc
 # (folder adhoc-products/<name>/, earlier files kept). Manual only.
@@ -53,6 +54,11 @@ on:
         required: false
         default: true
         type: boolean
+      minimal_caption:
+        description: "Caption with only the satellite name and the timestamp (no recipe line, notes or legend)"
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: himawari-adhoc
@@ -102,6 +108,7 @@ jobs:
           IN_WINDS: ${{ inputs.winds }}
           IN_FIRE: ${{ inputs.fire }}
           IN_RAYLEIGH: ${{ inputs.rayleigh }}
+          IN_MINIMAL: ${{ inputs.minimal_caption }}
         run: |
           set -uo pipefail
           [[ "$IN_NAME" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "::error::name may only hold letters, digits, - and _"; exit 2; }
@@ -114,7 +121,8 @@ jobs:
             if [ "$IN_WINDS" = "true" ]; then args+=(--winds); else args+=(--no-winds); fi
             if [ "$IN_FIRE" = "true" ]; then args+=(--fire); else args+=(--no-fire); fi
             if [ "$IN_RAYLEIGH" = "true" ]; then args+=(--rayleigh); else args+=(--no-rayleigh); fi
-            if python scripts/himawari_truecolor.py "${args[@]}"; then
+            if [ "$IN_MINIMAL" = "true" ]; then args+=(--minimal-caption); fi
+            if python scripts/adhoc_products.py "${args[@]}"; then
               # the scan's own PNG (not latest.png, not thumbs/previews) -> <name>/<scan>_<product>.png
               f=$(find "$RUNNER_TEMP/build-$prod" -name '[0-9]*_[0-9]*.png' -not -path '*/thumbs/*' -not -path '*/previews/*' | head -n 1)
               if [ -n "$f" ]; then cp "$f" "adhoc-out/$IN_NAME/$(basename "${f%.png}")_$prod.png"; else echo "::warning::$prod: no image produced"; failed=1; fi
